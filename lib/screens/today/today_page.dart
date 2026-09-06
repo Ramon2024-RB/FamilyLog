@@ -2,12 +2,18 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 
+import '../../models/profile/user_profile.dart';
 import '../../stores/family_store.dart';
 
 class TodayPage extends StatefulWidget {
-  const TodayPage({super.key, required this.familyStore});
+  const TodayPage({
+    super.key,
+    required this.familyStore,
+    required this.currentProfile,
+  });
 
   final FamilyStore familyStore;
+  final UserProfile currentProfile;
 
   @override
   State<TodayPage> createState() => _TodayPageState();
@@ -18,6 +24,16 @@ class _TodayPageState extends State<TodayPage> {
   void initState() {
     super.initState();
     widget.familyStore.addListener(_onFamilyChanged);
+  }
+
+  @override
+  void didUpdateWidget(covariant TodayPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    if (oldWidget.familyStore != widget.familyStore) {
+      oldWidget.familyStore.removeListener(_onFamilyChanged);
+      widget.familyStore.addListener(_onFamilyChanged);
+    }
   }
 
   @override
@@ -183,17 +199,18 @@ class _TodayPageState extends State<TodayPage> {
   }
 
   String _greetingFor(DateTime dateTime) {
-    final hour = dateTime.hour;
+    final firstName = widget.currentProfile.firstName.trim();
+    final nameSuffix = firstName.isEmpty ? '' : ', $firstName';
 
-    if (hour < 11) {
-      return 'Guten Morgen';
+    if (dateTime.hour < 11) {
+      return 'Guten Morgen$nameSuffix';
     }
 
-    if (hour < 18) {
-      return 'Guten Tag';
+    if (dateTime.hour < 18) {
+      return 'Guten Tag$nameSuffix';
     }
 
-    return 'Guten Abend';
+    return 'Guten Abend$nameSuffix';
   }
 
   String _formatDate(DateTime dateTime) {

@@ -1,6 +1,15 @@
-import 'package:flutter/material.dart';
+import 'dart:async';
 
+import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../models/profile/user_profile.dart';
+import '../screens/auth/auth_welcome_page.dart';
+import '../screens/auth/sign_in_page.dart';
+import '../screens/auth/sign_up_page.dart';
 import '../screens/main/main_shell.dart';
+import '../services/auth/auth_service.dart';
+import '../services/profile/profile_service.dart';
 import '../stores/family_store.dart';
 
 class FamilyLogApp extends StatefulWidget {
@@ -11,7 +20,16 @@ class FamilyLogApp extends StatefulWidget {
 }
 
 class _FamilyLogAppState extends State<FamilyLogApp> {
+  final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
+
   late final FamilyStore _familyStore;
+  late final AuthService _authService;
+  late final ProfileService _profileService;
+  late final StreamSubscription<AuthState> _authSubscription;
+
+  UserProfile? _currentProfile;
+  bool _isLoadingProfile = false;
+  String? _profileError;
 
   @override
   void initState() {
@@ -19,10 +37,22 @@ class _FamilyLogAppState extends State<FamilyLogApp> {
 
     _familyStore = FamilyStore();
     _familyStore.initialize();
+
+    _authService = AuthService();
+    _profileService = ProfileService();
+
+    _authSubscription = _authService.authStateChanges.listen((_) {
+      _handleAuthStateChanged();
+    });
+
+    if (_authService.isSignedIn) {
+      _loadCurrentProfile();
+    }
   }
 
   @override
   void dispose() {
+    _authSubscription.cancel();
     _familyStore.dispose();
     super.dispose();
   }
@@ -32,6 +62,7 @@ class _FamilyLogAppState extends State<FamilyLogApp> {
     const seedColor = Color(0xFF5D6FC0);
 
     return MaterialApp(
+      navigatorKey: _navigatorKey,
       debugShowCheckedModeBanner: false,
       title: 'FamilyLog',
       themeMode: ThemeMode.system,
@@ -50,7 +81,153 @@ class _FamilyLogAppState extends State<FamilyLogApp> {
           brightness: Brightness.dark,
         ),
       ),
-      home: MainShell(familyStore: _familyStore),
+      home: _buildHome(),
+    );
+  }
+
+  Widget _buildHome() {
+    if (!_authService.isSignedIn) {
+      return AuthWelcomePage(onSignIn: _openSignIn, onSignUp: _openSignUp);
+    }
+
+    if (_isLoadingProfile) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+
+    if (_profileError != null) {
+      return Scaffold(
+        body: SafeArea(
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.error_outline, size: 48),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Profil konnte nicht geladen werden.',
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(_profileError!, textAlign: TextAlign.center),
+                  const SizedBox(height: 20),
+                  FilledButton(
+                    onPressed: _loadCurrentProfile,
+                    child: const Text('Erneut versuchen'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (_currentProfile == null) {
+      return Scaffold(
+        body: SafeArea(
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'Für diesen Account wurde kein Profil gefunden.',
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 20),
+                  FilledButton(
+                    onPressed: _loadCurrentProfile,
+                    child: const Text('Erneut versuchen'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return MainShell(
+      familyStore: _familyStore,
+      currentProfile: _currentProfile!,
+    );
+  }
+
+  Future<void> _handleAuthStateChanged() async {
+    if (!_authService.isSignedIn) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _currentProfile = null;
+        _profileError = null;
+        _isLoadingProfile = false;
+      });
+
+      return;
+    }
+
+    await _loadCurrentProfile();
+  }
+
+  Future<void> _loadCurrentProfile() async {
+    if (!_authService.isSignedIn) {
+      return;
+    }
+
+    setState(() {
+      _isLoadingProfile = true;
+      _profileError = null;
+    });
+
+    try {
+      final profile = await _profileService.getCurrentProfile();
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _currentProfile = profile;
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _profileError = error.toString();
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoadingProfile = false;
+        });
+      }
+    }
+  }
+
+  void _openSignIn() {
+    _navigatorKey.currentState?.push(
+      MaterialPageRoute(
+        builder: (context) {
+          return SignInPage(authService: _authService);
+        },
+      ),
+    );
+  }
+
+  void _openSignUp() {
+    _navigatorKey.currentState?.push(
+      MaterialPageRoute(
+        builder: (context) {
+          return SignUpPage(authService: _authService);
+        },
+      ),
     );
   }
 }

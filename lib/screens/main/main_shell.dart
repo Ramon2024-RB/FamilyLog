@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../models/profile/user_profile.dart';
 import '../../stores/family_store.dart';
 import '../calendar/calendar_page.dart';
 import '../chat/chat_page.dart';
@@ -8,9 +9,14 @@ import '../more/more_page.dart';
 import '../today/today_page.dart';
 
 class MainShell extends StatefulWidget {
-  const MainShell({super.key, required this.familyStore});
+  const MainShell({
+    super.key,
+    required this.familyStore,
+    required this.currentProfile,
+  });
 
   final FamilyStore familyStore;
+  final UserProfile currentProfile;
 
   @override
   State<MainShell> createState() => _MainShellState();
@@ -22,7 +28,10 @@ class _MainShellState extends State<MainShell> {
   @override
   Widget build(BuildContext context) {
     final pages = [
-      TodayPage(familyStore: widget.familyStore),
+      TodayPage(
+        familyStore: widget.familyStore,
+        currentProfile: widget.currentProfile,
+      ),
       const ChatPage(),
       const CalendarPage(),
       FamilyPage(familyStore: widget.familyStore),
