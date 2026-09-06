@@ -68,5 +68,9 @@
 	</array>
 <key>NSPhotoLibraryUsageDescription</key>
 <string>FamilyLog benötigt Zugriff auf deine Fotos, damit du ein Familienbild auswählen kannst.</string>
+
+<key>NSCameraUsageDescription</key>
+<string>FamilyLog benötigt Zugriff auf die Kamera, damit du Einladungscodes als QR-Code scannen kannst.</string>
+
 </dict>
 </plist>

@@ -1,6 +1,7 @@
 import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
 
+import '../models/family/family_invitation.dart';
 import '../models/family/family_member.dart';
 import '../models/family/family_profile.dart';
 
@@ -26,16 +27,21 @@ class AppDatabase {
 
     return openDatabase(
       path,
-      version: 2,
+      version: 3,
       onCreate: (database, version) async {
         await _createFamilyMembersTable(database);
         await _createFamilyProfileTable(database);
+        await _createFamilyInvitationsTable(database);
         await _insertDefaultFamilyProfile(database);
       },
       onUpgrade: (database, oldVersion, newVersion) async {
         if (oldVersion < 2) {
           await _createFamilyProfileTable(database);
           await _insertDefaultFamilyProfile(database);
+        }
+
+        if (oldVersion < 3) {
+          await _createFamilyInvitationsTable(database);
         }
       },
     );
@@ -61,6 +67,19 @@ class AppDatabase {
         name TEXT NOT NULL,
         description TEXT NOT NULL,
         image_path TEXT
+      )
+    ''');
+  }
+
+  Future<void> _createFamilyInvitationsTable(Database database) async {
+    await database.execute('''
+      CREATE TABLE family_invitations (
+        id TEXT PRIMARY KEY,
+        family_id TEXT NOT NULL,
+        code TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        expires_at TEXT,
+        status TEXT NOT NULL
       )
     ''');
   }
@@ -155,6 +174,50 @@ class AppDatabase {
     );
   }
 
+  Future<List<FamilyInvitation>> getFamilyInvitations(String familyId) async {
+    final db = await database;
+
+    final rows = await db.query(
+      'family_invitations',
+      where: 'family_id = ?',
+      whereArgs: [familyId],
+      orderBy: 'created_at DESC',
+    );
+
+    return rows.map(_familyInvitationFromMap).toList();
+  }
+
+  Future<void> insertFamilyInvitation(FamilyInvitation invitation) async {
+    final db = await database;
+
+    await db.insert(
+      'family_invitations',
+      _familyInvitationToMap(invitation),
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  Future<void> updateFamilyInvitation(FamilyInvitation invitation) async {
+    final db = await database;
+
+    await db.update(
+      'family_invitations',
+      _familyInvitationToMap(invitation),
+      where: 'id = ?',
+      whereArgs: [invitation.id],
+    );
+  }
+
+  Future<void> deleteFamilyInvitation(String invitationId) async {
+    final db = await database;
+
+    await db.delete(
+      'family_invitations',
+      where: 'id = ?',
+      whereArgs: [invitationId],
+    );
+  }
+
   Map<String, Object?> _familyMemberToMap(FamilyMember member) {
     return {
       'id': member.id,
@@ -195,10 +258,41 @@ class AppDatabase {
     );
   }
 
+  Map<String, Object?> _familyInvitationToMap(FamilyInvitation invitation) {
+    return {
+      'id': invitation.id,
+      'family_id': invitation.familyId,
+      'code': invitation.code,
+      'created_at': invitation.createdAt.toIso8601String(),
+      'expires_at': invitation.expiresAt?.toIso8601String(),
+      'status': invitation.status.name,
+    };
+  }
+
+  FamilyInvitation _familyInvitationFromMap(Map<String, Object?> map) {
+    final expiresAt = map['expires_at'] as String?;
+
+    return FamilyInvitation(
+      id: map['id'] as String,
+      familyId: map['family_id'] as String,
+      code: map['code'] as String,
+      createdAt: DateTime.parse(map['created_at'] as String),
+      expiresAt: expiresAt == null ? null : DateTime.parse(expiresAt),
+      status: _invitationStatusFromString(map['status'] as String),
+    );
+  }
+
   FamilyMemberRole _roleFromString(String value) {
     return FamilyMemberRole.values.firstWhere(
       (role) => role.name == value,
       orElse: () => FamilyMemberRole.adult,
+    );
+  }
+
+  FamilyInvitationStatus _invitationStatusFromString(String value) {
+    return FamilyInvitationStatus.values.firstWhere(
+      (status) => status.name == value,
+      orElse: () => FamilyInvitationStatus.expired,
     );
   }
 }

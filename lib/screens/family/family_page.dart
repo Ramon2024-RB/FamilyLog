@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../models/family/family_member.dart';
 import '../../stores/family_store.dart';
 import 'family_member_detail_page.dart';
+import 'invite_family_member_page.dart';
 import 'manage_family_page.dart';
 import 'widgets/add_family_member_dialog.dart';
 
@@ -95,7 +96,7 @@ class _FamilyPageState extends State<FamilyPage> {
           ),
           const SizedBox(height: 8),
           FilledButton.icon(
-            onPressed: _addMember,
+            onPressed: _showAddMemberOptions,
             icon: const Icon(Icons.person_add_alt_1),
             label: const Text('Mitglied hinzufügen'),
           ),
@@ -114,7 +115,75 @@ class _FamilyPageState extends State<FamilyPage> {
     );
   }
 
-  Future<void> _addMember() async {
+  Future<void> _showAddMemberOptions() async {
+    final action = await showModalBottomSheet<_AddMemberAction>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(8, 4, 8, 16),
+                  child: Text(
+                    'Mitglied hinzufügen',
+                    style: Theme.of(context).textTheme.titleLarge
+                        ?.copyWith(fontWeight: FontWeight.w700),
+                  ),
+                ),
+                _AddMemberOption(
+                  icon: Icons.send_outlined,
+                  title: 'FamilyLog-Nutzer einladen',
+                  subtitle:
+                      'Erstelle einen Einladungscode für ein Familienmitglied.',
+                  onTap: () {
+                    Navigator.of(context).pop(_AddMemberAction.invite);
+                  },
+                ),
+                const SizedBox(height: 8),
+                _AddMemberOption(
+                  icon: Icons.person_add_alt_outlined,
+                  title: 'Person lokal anlegen',
+                  subtitle: 'Füge eine Person hinzu, die keinen eigenen Account benötigt.',
+                  onTap: () {
+                    Navigator.of(context).pop(_AddMemberAction.createLocal);
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+
+    if (!mounted || action == null) {
+      return;
+    }
+
+    switch (action) {
+      case _AddMemberAction.invite:
+        await _openInvitationPage();
+
+      case _AddMemberAction.createLocal:
+        await _addLocalMember();
+    }
+  }
+
+  Future<void> _openInvitationPage() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) {
+          return InviteFamilyMemberPage(familyStore: widget.familyStore);
+        },
+      ),
+    );
+  }
+
+  Future<void> _addLocalMember() async {
     final member = await showDialog<FamilyMember>(
       context: context,
       builder: (context) {
@@ -187,6 +256,78 @@ class _FamilyPageState extends State<FamilyPage> {
           SnackBar(content: Text('${deletedMember.fullName} wurde entfernt.')),
         );
     }
+  }
+}
+
+enum _AddMemberAction { invite, createLocal }
+
+class _AddMemberOption extends StatelessWidget {
+  const _AddMemberOption({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Material(
+      color: theme.colorScheme.surfaceContainerHighest,
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.primaryContainer,
+                  borderRadius: BorderRadius.circular(15),
+                ),
+                child: Icon(icon, color: theme.colorScheme.primary),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      subtitle,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Icon(
+                Icons.chevron_right,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 
