@@ -21,18 +21,6 @@ class _FamilyPageState extends State<FamilyPage> {
     widget.backendFamilyStore.addListener(_onFamilyChanged);
   }
 
-  Future<void> _openManageFamily() async {
-    await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) {
-          return ManageFamilyPage(
-            backendFamilyStore: widget.backendFamilyStore,
-          );
-        },
-      ),
-    );
-  }
-
   @override
   void didUpdateWidget(covariant FamilyPage oldWidget) {
     super.didUpdateWidget(oldWidget);
@@ -62,6 +50,7 @@ class _FamilyPageState extends State<FamilyPage> {
     final theme = Theme.of(context);
     final family = widget.backendFamilyStore.selectedFamily;
     final members = widget.backendFamilyStore.members;
+    final familyImageUrl = widget.backendFamilyStore.selectedFamilyImageUrl;
 
     if (family == null) {
       return const Scaffold(
@@ -81,7 +70,7 @@ class _FamilyPageState extends State<FamilyPage> {
         ],
       ),
       body: RefreshIndicator(
-        onRefresh: widget.backendFamilyStore.loadSelectedFamilyMembers,
+        onRefresh: _refreshFamily,
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
@@ -90,6 +79,7 @@ class _FamilyPageState extends State<FamilyPage> {
               familyName: family.name,
               description: family.description,
               memberCount: members.length,
+              imageUrl: familyImageUrl,
             ),
             const SizedBox(height: 28),
             Row(
@@ -137,6 +127,22 @@ class _FamilyPageState extends State<FamilyPage> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Future<void> _refreshFamily() async {
+    await widget.backendFamilyStore.loadFamilySpaces();
+  }
+
+  Future<void> _openManageFamily() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) {
+          return ManageFamilyPage(
+            backendFamilyStore: widget.backendFamilyStore,
+          );
+        },
       ),
     );
   }
@@ -196,11 +202,13 @@ class _FamilyHeader extends StatelessWidget {
     required this.familyName,
     required this.description,
     required this.memberCount,
+    required this.imageUrl,
   });
 
   final String familyName;
   final String description;
   final int memberCount;
+  final String? imageUrl;
 
   @override
   Widget build(BuildContext context) {
@@ -221,11 +229,16 @@ class _FamilyHeader extends StatelessWidget {
               color: theme.colorScheme.surface.withValues(alpha: 0.75),
               borderRadius: BorderRadius.circular(22),
             ),
-            child: Icon(
-              Icons.family_restroom,
-              size: 34,
-              color: theme.colorScheme.primary,
-            ),
+            clipBehavior: Clip.antiAlias,
+            child: imageUrl != null
+                ? Image.network(
+                    imageUrl!,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) {
+                      return _buildPlaceholder(theme);
+                    },
+                  )
+                : _buildPlaceholder(theme),
           ),
           const SizedBox(width: 16),
           Expanded(
@@ -260,6 +273,14 @@ class _FamilyHeader extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildPlaceholder(ThemeData theme) {
+    return Icon(
+      Icons.family_restroom,
+      size: 34,
+      color: theme.colorScheme.primary,
     );
   }
 }

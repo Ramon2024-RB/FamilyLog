@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 
 import '../models/family/backend_family_member.dart';
@@ -15,21 +17,23 @@ class BackendFamilyStore extends ChangeNotifier {
 
   bool _isLoading = false;
   bool _isLoadingMembers = false;
+  bool _isUpdatingFamilyImage = false;
 
   String? _error;
   String? _selectedFamilyId;
+  String? _selectedFamilyImageUrl;
 
   List<BackendFamilySpace> get familySpaces => List.unmodifiable(_familySpaces);
 
   List<BackendFamilyMember> get members => List.unmodifiable(_members);
 
   bool get isLoading => _isLoading;
-
   bool get isLoadingMembers => _isLoadingMembers;
+  bool get isUpdatingFamilyImage => _isUpdatingFamilyImage;
 
   String? get error => _error;
-
   String? get selectedFamilyId => _selectedFamilyId;
+  String? get selectedFamilyImageUrl => _selectedFamilyImageUrl;
 
   bool get hasFamilies => _familySpaces.isNotEmpty;
 
@@ -66,6 +70,7 @@ class BackendFamilyStore extends ChangeNotifier {
       if (_familySpaces.isEmpty) {
         _selectedFamilyId = null;
         _members.clear();
+        _selectedFamilyImageUrl = null;
       } else {
         final selectedStillExists = _familySpaces.any(
           (family) => family.id == _selectedFamilyId,
@@ -76,6 +81,7 @@ class BackendFamilyStore extends ChangeNotifier {
         }
 
         await _loadSelectedFamilyMembers();
+        await _loadSelectedFamilyImage();
       }
     } catch (error) {
       _error = error.toString();
@@ -116,6 +122,32 @@ class BackendFamilyStore extends ChangeNotifier {
     }
   }
 
+  Future<void> loadSelectedFamilyImage() async {
+    _error = null;
+
+    try {
+      await _loadSelectedFamilyImage();
+    } catch (error) {
+      _error = error.toString();
+      notifyListeners();
+    }
+  }
+
+  Future<void> _loadSelectedFamilyImage() async {
+    final family = selectedFamily;
+
+    if (family == null || family.imageUrl == null) {
+      _selectedFamilyImageUrl = null;
+      notifyListeners();
+      return;
+    }
+
+    _selectedFamilyImageUrl = await _familySpaceService
+        .createFamilyImageSignedUrl(family);
+
+    notifyListeners();
+  }
+
   Future<BackendFamilySpace> createFamilySpace({
     required String name,
     String description = '',
@@ -130,6 +162,7 @@ class BackendFamilyStore extends ChangeNotifier {
 
       _familySpaces.add(family);
       _selectedFamilyId = family.id;
+      _selectedFamilyImageUrl = null;
 
       await _loadSelectedFamilyMembers();
 
@@ -162,11 +195,7 @@ class BackendFamilyStore extends ChangeNotifier {
         description: description,
       );
 
-      final index = _familySpaces.indexWhere((family) => family.id == familyId);
-
-      if (index != -1) {
-        _familySpaces[index] = updatedFamily;
-      }
+      _replaceFamily(updatedFamily);
 
       notifyListeners();
 
@@ -175,6 +204,62 @@ class BackendFamilyStore extends ChangeNotifier {
       _error = error.toString();
       notifyListeners();
       rethrow;
+    }
+  }
+
+  Future<void> uploadSelectedFamilyImage(File imageFile) async {
+    final familyId = _selectedFamilyId;
+
+    if (familyId == null) {
+      throw StateError('Keine Familie ausgewählt.');
+    }
+
+    _isUpdatingFamilyImage = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final updatedFamily = await _familySpaceService.uploadFamilyImage(
+        familyId: familyId,
+        imageFile: imageFile,
+      );
+
+      _replaceFamily(updatedFamily);
+
+      await _loadSelectedFamilyImage();
+    } catch (error) {
+      _error = error.toString();
+      rethrow;
+    } finally {
+      _isUpdatingFamilyImage = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> removeSelectedFamilyImage() async {
+    final familyId = _selectedFamilyId;
+
+    if (familyId == null) {
+      throw StateError('Keine Familie ausgewählt.');
+    }
+
+    _isUpdatingFamilyImage = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final updatedFamily = await _familySpaceService.removeFamilyImage(
+        familyId: familyId,
+      );
+
+      _replaceFamily(updatedFamily);
+      _selectedFamilyImageUrl = null;
+    } catch (error) {
+      _error = error.toString();
+      rethrow;
+    } finally {
+      _isUpdatingFamilyImage = false;
+      notifyListeners();
     }
   }
 
@@ -187,10 +272,22 @@ class BackendFamilyStore extends ChangeNotifier {
 
     _selectedFamilyId = familyId;
     _members.clear();
+    _selectedFamilyImageUrl = null;
 
     notifyListeners();
 
     await _loadSelectedFamilyMembers();
+    await _loadSelectedFamilyImage();
+  }
+
+  void _replaceFamily(BackendFamilySpace updatedFamily) {
+    final index = _familySpaces.indexWhere(
+      (family) => family.id == updatedFamily.id,
+    );
+
+    if (index != -1) {
+      _familySpaces[index] = updatedFamily;
+    }
   }
 
   void clear() {
@@ -198,10 +295,12 @@ class BackendFamilyStore extends ChangeNotifier {
     _members.clear();
 
     _selectedFamilyId = null;
+    _selectedFamilyImageUrl = null;
     _error = null;
 
     _isLoading = false;
     _isLoadingMembers = false;
+    _isUpdatingFamilyImage = false;
 
     notifyListeners();
   }

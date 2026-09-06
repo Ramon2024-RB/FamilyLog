@@ -53,6 +53,7 @@ class _TodayPageState extends State<TodayPage> {
     final theme = Theme.of(context);
     final family = widget.backendFamilyStore.selectedFamily;
     final members = widget.backendFamilyStore.members;
+    final familyImageUrl = widget.backendFamilyStore.selectedFamilyImageUrl;
     final now = DateTime.now();
 
     return Scaffold(
@@ -67,9 +68,7 @@ class _TodayPageState extends State<TodayPage> {
         ],
       ),
       body: RefreshIndicator(
-        onRefresh: () async {
-          await widget.backendFamilyStore.loadFamilySpaces();
-        },
+        onRefresh: widget.backendFamilyStore.loadFamilySpaces,
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
@@ -108,11 +107,16 @@ class _TodayPageState extends State<TodayPage> {
                         ),
                         borderRadius: BorderRadius.circular(18),
                       ),
-                      child: Icon(
-                        Icons.family_restroom,
-                        color: theme.colorScheme.primary,
-                        size: 30,
-                      ),
+                      clipBehavior: Clip.antiAlias,
+                      child: familyImageUrl != null
+                          ? Image.network(
+                              familyImageUrl,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) {
+                                return _buildFamilyPlaceholder(theme);
+                              },
+                            )
+                          : _buildFamilyPlaceholder(theme),
                     ),
                     const SizedBox(width: 16),
                     Expanded(
@@ -209,6 +213,14 @@ class _TodayPageState extends State<TodayPage> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildFamilyPlaceholder(ThemeData theme) {
+    return Icon(
+      Icons.family_restroom,
+      color: theme.colorScheme.primary,
+      size: 30,
     );
   }
 

@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../models/family/backend_family_member.dart';
@@ -8,6 +10,8 @@ class FamilySpaceService {
     : _client = client ?? Supabase.instance.client;
 
   final SupabaseClient _client;
+
+  static const String _familyImagesBucket = 'family-images';
 
   Future<BackendFamilySpace> createFamilySpace({
     required String name,
@@ -112,5 +116,106 @@ class FamilySpaceService {
         .single();
 
     return BackendFamilySpace.fromMap(response);
+  }
+
+  Future<BackendFamilySpace> uploadFamilyImage({
+    required String familyId,
+    required File imageFile,
+  }) async {
+    final user = _client.auth.currentUser;
+
+    if (user == null) {
+      throw StateError('Kein Benutzer angemeldet.');
+    }
+
+    final extension = _fileExtension(imageFile.path);
+    final storagePath = '$familyId/family.$extension';
+
+    await _client.storage
+        .from(_familyImagesBucket)
+        .upload(
+          storagePath,
+          imageFile,
+          fileOptions: const FileOptions(upsert: true, cacheControl: '3600'),
+        );
+
+    final response = await _client
+        .from('family_spaces')
+        .update({
+          'image_url': storagePath,
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        })
+        .eq('id', familyId)
+        .select()
+        .single();
+
+    return BackendFamilySpace.fromMap(response);
+  }
+
+  Future<BackendFamilySpace> removeFamilyImage({
+    required String familyId,
+  }) async {
+    final user = _client.auth.currentUser;
+
+    if (user == null) {
+      throw StateError('Kein Benutzer angemeldet.');
+    }
+
+    final familyResponse = await _client
+        .from('family_spaces')
+        .select('image_url')
+        .eq('id', familyId)
+        .single();
+
+    final storagePath = familyResponse['image_url'] as String?;
+
+    if (storagePath != null && storagePath.trim().isNotEmpty) {
+      await _client.storage.from(_familyImagesBucket).remove([storagePath]);
+    }
+
+    final response = await _client
+        .from('family_spaces')
+        .update({
+          'image_url': null,
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        })
+        .eq('id', familyId)
+        .select()
+        .single();
+
+    return BackendFamilySpace.fromMap(response);
+  }
+
+  Future<String?> createFamilyImageSignedUrl(BackendFamilySpace family) async {
+    final storagePath = family.imageUrl;
+
+    if (storagePath == null || storagePath.trim().isEmpty) {
+      return null;
+    }
+
+    return _client.storage
+        .from(_familyImagesBucket)
+        .createSignedUrl(storagePath, 60 * 60);
+  }
+
+  String _fileExtension(String filePath) {
+    final fileName = filePath.split('/').last;
+    final dotIndex = fileName.lastIndexOf('.');
+
+    if (dotIndex == -1 || dotIndex == fileName.length - 1) {
+      return 'jpg';
+    }
+
+    final extension = fileName.substring(dotIndex + 1).toLowerCase();
+
+    switch (extension) {
+      case 'jpg':
+      case 'jpeg':
+      case 'png':
+      case 'webp':
+        return extension;
+      default:
+        return 'jpg';
+    }
   }
 }

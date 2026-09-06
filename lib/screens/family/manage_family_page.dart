@@ -1,4 +1,7 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../stores/backend_family_store.dart';
 
@@ -13,6 +16,7 @@ class ManageFamilyPage extends StatefulWidget {
 
 class _ManageFamilyPageState extends State<ManageFamilyPage> {
   final _formKey = GlobalKey<FormState>();
+  final _imagePicker = ImagePicker();
 
   late final TextEditingController _nameController;
   late final TextEditingController _descriptionController;
@@ -30,14 +34,24 @@ class _ManageFamilyPageState extends State<ManageFamilyPage> {
     _descriptionController = TextEditingController(
       text: family?.description ?? '',
     );
+
+    widget.backendFamilyStore.addListener(_onStoreChanged);
   }
 
   @override
   void dispose() {
+    widget.backendFamilyStore.removeListener(_onStoreChanged);
+
     _nameController.dispose();
     _descriptionController.dispose();
 
     super.dispose();
+  }
+
+  void _onStoreChanged() {
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   @override
@@ -52,6 +66,10 @@ class _ManageFamilyPageState extends State<ManageFamilyPage> {
       );
     }
 
+    final imageUrl = widget.backendFamilyStore.selectedFamilyImageUrl;
+
+    final isUpdatingImage = widget.backendFamilyStore.isUpdatingFamilyImage;
+
     return Scaffold(
       appBar: AppBar(title: const Text('Familie verwalten')),
       body: Form(
@@ -60,37 +78,76 @@ class _ManageFamilyPageState extends State<ManageFamilyPage> {
           padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
           children: [
             Center(
-              child: Container(
-                width: 112,
-                height: 112,
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.primaryContainer,
-                  borderRadius: BorderRadius.circular(32),
-                ),
-                child: Icon(
-                  Icons.family_restroom,
-                  size: 52,
-                  color: theme.colorScheme.primary,
-                ),
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Container(
+                    width: 120,
+                    height: 120,
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.primaryContainer,
+                      borderRadius: BorderRadius.circular(32),
+                    ),
+                    clipBehavior: Clip.antiAlias,
+                    child: imageUrl != null
+                        ? Image.network(
+                            imageUrl,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) {
+                              return _buildPlaceholder(theme);
+                            },
+                          )
+                        : _buildPlaceholder(theme),
+                  ),
+                  if (isUpdatingImage)
+                    Positioned.fill(
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.35),
+                          borderRadius: BorderRadius.circular(32),
+                        ),
+                        child: const Center(child: CircularProgressIndicator()),
+                      ),
+                    ),
+                  Positioned(
+                    right: -6,
+                    bottom: -6,
+                    child: IconButton.filled(
+                      onPressed: isUpdatingImage ? null : _pickFamilyImage,
+                      tooltip: 'Familienbild auswählen',
+                      icon: const Icon(Icons.photo_library_outlined),
+                    ),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 18),
             Text(
-              'Familienraum',
+              'Familienbild',
               textAlign: TextAlign.center,
-              style: theme.textTheme.titleLarge?.copyWith(
+              style: theme.textTheme.titleMedium?.copyWith(
                 fontWeight: FontWeight.w700,
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
             Text(
-              'Das Familienbild richten wir anschließend '
-              'über den gemeinsamen Cloud-Speicher ein.',
+              'Das Bild wird im gemeinsamen Familienraum '
+              'gespeichert.',
               textAlign: TextAlign.center,
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),
             ),
+            if (imageUrl != null) ...[
+              const SizedBox(height: 12),
+              Center(
+                child: TextButton.icon(
+                  onPressed: isUpdatingImage ? null : _removeFamilyImage,
+                  icon: const Icon(Icons.delete_outline),
+                  label: const Text('Familienbild entfernen'),
+                ),
+              ),
+            ],
             const SizedBox(height: 28),
             TextFormField(
               controller: _nameController,
@@ -160,10 +217,8 @@ class _ManageFamilyPageState extends State<ManageFamilyPage> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
-                      'Familienname und Beschreibung werden '
-                      'im gemeinsamen Familienraum gespeichert '
-                      'und stehen damit allen berechtigten '
-                      'Familienmitgliedern zur Verfügung.',
+                      'Familienbild, Familienname und Beschreibung '
+                      'werden im gemeinsamen Familienraum gespeichert.',
                       style: theme.textTheme.bodyMedium?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant,
                       ),
@@ -176,6 +231,105 @@ class _ManageFamilyPageState extends State<ManageFamilyPage> {
         ),
       ),
     );
+  }
+
+  Widget _buildPlaceholder(ThemeData theme) {
+    return Icon(
+      Icons.family_restroom,
+      size: 54,
+      color: theme.colorScheme.primary,
+    );
+  }
+
+  Future<void> _pickFamilyImage() async {
+    try {
+      final pickedImage = await _imagePicker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 85,
+        maxWidth: 1600,
+      );
+
+      if (pickedImage == null) {
+        return;
+      }
+
+      await widget.backendFamilyStore.uploadSelectedFamilyImage(
+        File(pickedImage.path),
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Familienbild wurde gespeichert.')),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Das Familienbild konnte nicht gespeichert werden.'),
+        ),
+      );
+    }
+  }
+
+  Future<void> _removeFamilyImage() async {
+    final shouldRemove = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Familienbild entfernen?'),
+          content: const Text(
+            'Das aktuelle Familienbild wird aus dem '
+            'gemeinsamen Familienraum entfernt.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop(false);
+              },
+              child: const Text('Abbrechen'),
+            ),
+            FilledButton(
+              onPressed: () {
+                Navigator.of(context).pop(true);
+              },
+              child: const Text('Entfernen'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (shouldRemove != true) {
+      return;
+    }
+
+    try {
+      await widget.backendFamilyStore.removeSelectedFamilyImage();
+
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Familienbild wurde entfernt.')),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Das Familienbild konnte nicht entfernt werden.'),
+        ),
+      );
+    }
   }
 
   Future<void> _save() async {
