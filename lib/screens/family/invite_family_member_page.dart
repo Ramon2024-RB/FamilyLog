@@ -4,12 +4,12 @@ import 'package:qr_flutter/qr_flutter.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../models/family/family_invitation.dart';
-import '../../stores/family_store.dart';
+import '../../stores/backend_family_store.dart';
 
 class InviteFamilyMemberPage extends StatefulWidget {
-  const InviteFamilyMemberPage({super.key, required this.familyStore});
+  const InviteFamilyMemberPage({super.key, required this.backendFamilyStore});
 
-  final FamilyStore familyStore;
+  final BackendFamilyStore backendFamilyStore;
 
   @override
   State<InviteFamilyMemberPage> createState() => _InviteFamilyMemberPageState();
@@ -17,25 +17,21 @@ class InviteFamilyMemberPage extends StatefulWidget {
 
 class _InviteFamilyMemberPageState extends State<InviteFamilyMemberPage> {
   FamilyInvitation? _invitation;
+  FamilyInvitationRole _selectedRole = FamilyInvitationRole.adult;
+
   bool _isCreating = false;
-  bool _isRevoking = false;
-
-  @override
-  void initState() {
-    super.initState();
-
-    final activeInvitations = widget.familyStore.activeInvitations;
-
-    if (activeInvitations.isNotEmpty) {
-      _invitation = activeInvitations.first;
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final family = widget.familyStore.family;
+    final family = widget.backendFamilyStore.selectedFamily;
     final invitation = _invitation;
+
+    if (family == null) {
+      return const Scaffold(
+        body: Center(child: Text('Keine Familie ausgewählt.')),
+      );
+    }
 
     return Scaffold(
       appBar: AppBar(title: const Text('Mitglied einladen')),
@@ -76,19 +72,43 @@ class _InviteFamilyMemberPageState extends State<InviteFamilyMemberPage> {
             ),
           ),
           const SizedBox(height: 28),
-          if (invitation == null)
+          if (invitation == null) ...[
+            Text(
+              'Rolle auswählen',
+              style: theme.textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Lege fest, welche Rolle das Familienmitglied '
+              'nach dem Beitritt erhält.',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 14),
+            _RoleSelector(
+              selectedRole: _selectedRole,
+              onChanged: (role) {
+                setState(() {
+                  _selectedRole = role;
+                });
+              },
+            ),
+            const SizedBox(height: 20),
             _EmptyInvitationCard(
               isCreating: _isCreating,
               onCreate: _createInvitation,
-            )
-          else
+            ),
+          ] else
             _InvitationCard(
               invitation: invitation,
               familyName: family.name,
-              isRevoking: _isRevoking,
-              onCopy: () => _copyCode(invitation.code),
+              role: _selectedRole,
+              onCopy: () => _copyCode(invitation.manualCode),
               onShare: () => _shareInvitation(invitation, family.name),
-              onRevoke: _revokeInvitation,
+              onCreateAnother: _createAnotherInvitation,
             ),
           const SizedBox(height: 28),
           Text(
@@ -100,21 +120,29 @@ class _InviteFamilyMemberPageState extends State<InviteFamilyMemberPage> {
           const SizedBox(height: 12),
           const _InfoRow(
             number: '1',
-            text: 'Erstelle einen persönlichen Einladungscode.',
+            text: 'Wähle die Rolle des neuen Familienmitglieds.',
           ),
           const SizedBox(height: 10),
           const _InfoRow(
             number: '2',
             text:
-                'Teile den Code oder zeige den QR-Code '
-                'dem Familienmitglied.',
+                'FamilyLog erstellt einen persönlichen '
+                'Einladungscode und QR-Code.',
           ),
           const SizedBox(height: 10),
           const _InfoRow(
             number: '3',
             text:
-                'Später kann die Einladung direkt in FamilyLog '
-                'angenommen werden.',
+                'Das Familienmitglied öffnet FamilyLog und '
+                'scannt den QR-Code oder gibt den kurzen '
+                'Code ein.',
+          ),
+          const SizedBox(height: 10),
+          const _InfoRow(
+            number: '4',
+            text:
+                'Vor dem Beitritt wird die Familie noch '
+                'einmal angezeigt und bestätigt.',
           ),
           const SizedBox(height: 28),
           Container(
@@ -130,8 +158,8 @@ class _InviteFamilyMemberPageState extends State<InviteFamilyMemberPage> {
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
-                    'Einladungscodes sind 7 Tage gültig und können '
-                    'jederzeit widerrufen werden.',
+                    'Jede Einladung ist nur einmal '
+                    'verwendbar und 7 Tage gültig.',
                     style: theme.textTheme.bodyMedium?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,
                     ),
@@ -146,12 +174,18 @@ class _InviteFamilyMemberPageState extends State<InviteFamilyMemberPage> {
   }
 
   Future<void> _createInvitation() async {
+    if (_isCreating) {
+      return;
+    }
+
     setState(() {
       _isCreating = true;
     });
 
     try {
-      final invitation = await widget.familyStore.createInvitation();
+      final invitation = await widget.backendFamilyStore.createInvitation(
+        role: _selectedRole,
+      );
 
       if (!mounted) {
         return;
@@ -160,6 +194,17 @@ class _InviteFamilyMemberPageState extends State<InviteFamilyMemberPage> {
       setState(() {
         _invitation = invitation;
       });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Einladung wurde erstellt.')),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(_errorMessage(error))));
     } finally {
       if (mounted) {
         setState(() {
@@ -167,6 +212,13 @@ class _InviteFamilyMemberPageState extends State<InviteFamilyMemberPage> {
         });
       }
     }
+  }
+
+  void _createAnotherInvitation() {
+    setState(() {
+      _invitation = null;
+      _selectedRole = FamilyInvitationRole.adult;
+    });
   }
 
   Future<void> _copyCode(String code) async {
@@ -190,11 +242,13 @@ class _InviteFamilyMemberPageState extends State<InviteFamilyMemberPage> {
 Du wurdest zu "$familyName" in FamilyLog eingeladen.
 
 Dein Einladungscode:
-${invitation.code}
+${invitation.manualCode}
 
 Öffne FamilyLog und gib diesen Code ein, um der Familie beizutreten.
 
-Der Einladungscode ist 7 Tage gültig.
+Alternativ kannst du den QR-Code direkt in FamilyLog scannen.
+
+Die Einladung ist einmal verwendbar und 7 Tage gültig.
 ''';
 
     await SharePlus.instance.share(
@@ -202,37 +256,138 @@ Der Einladungscode ist 7 Tage gültig.
     );
   }
 
-  Future<void> _revokeInvitation() async {
-    final invitation = _invitation;
+  String _errorMessage(Object error) {
+    final message = error.toString();
 
-    if (invitation == null) {
-      return;
+    if (message.contains('Not allowed to create invitations')) {
+      return 'Du darfst für diese Familie keine '
+          'Einladungen erstellen.';
     }
 
-    setState(() {
-      _isRevoking = true;
-    });
+    if (message.contains('Not authenticated')) {
+      return 'Du bist nicht mehr angemeldet.';
+    }
 
-    try {
-      await widget.familyStore.revokeInvitation(invitation.id);
+    return 'Die Einladung konnte nicht erstellt werden.';
+  }
+}
 
-      if (!mounted) {
-        return;
-      }
+class _RoleSelector extends StatelessWidget {
+  const _RoleSelector({required this.selectedRole, required this.onChanged});
 
-      setState(() {
-        _invitation = null;
-      });
+  final FamilyInvitationRole selectedRole;
+  final ValueChanged<FamilyInvitationRole> onChanged;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Einladung wurde widerrufen.')),
-      );
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isRevoking = false;
-        });
-      }
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: FamilyInvitationRole.values.map((role) {
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: _RoleCard(
+            role: role,
+            isSelected: role == selectedRole,
+            onTap: () => onChanged(role),
+          ),
+        );
+      }).toList(),
+    );
+  }
+}
+
+class _RoleCard extends StatelessWidget {
+  const _RoleCard({
+    required this.role,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  final FamilyInvitationRole role;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Material(
+      color: isSelected
+          ? theme.colorScheme.primaryContainer
+          : theme.colorScheme.surface,
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            children: [
+              Icon(
+                _roleIcon(role),
+                color: isSelected
+                    ? theme.colorScheme.primary
+                    : theme.colorScheme.onSurfaceVariant,
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      role.label,
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      _roleDescription(role),
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Icon(
+                isSelected
+                    ? Icons.radio_button_checked
+                    : Icons.radio_button_off,
+                color: isSelected
+                    ? theme.colorScheme.primary
+                    : theme.colorScheme.outline,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  IconData _roleIcon(FamilyInvitationRole role) {
+    switch (role) {
+      case FamilyInvitationRole.admin:
+        return Icons.admin_panel_settings_outlined;
+      case FamilyInvitationRole.adult:
+        return Icons.person_outline;
+      case FamilyInvitationRole.child:
+        return Icons.child_care_outlined;
+      case FamilyInvitationRole.senior:
+        return Icons.elderly_outlined;
+    }
+  }
+
+  String _roleDescription(FamilyInvitationRole role) {
+    switch (role) {
+      case FamilyInvitationRole.admin:
+        return 'Kann die Familie später mitverwalten.';
+      case FamilyInvitationRole.adult:
+        return 'Normales erwachsenes Familienmitglied.';
+      case FamilyInvitationRole.child:
+        return 'Für ein Kind mit angepassten Rechten.';
+      case FamilyInvitationRole.senior:
+        return 'Für ältere Familienmitglieder.';
     }
   }
 }
@@ -261,7 +416,7 @@ class _EmptyInvitationCard extends StatelessWidget {
           Icon(Icons.key_outlined, size: 40, color: theme.colorScheme.primary),
           const SizedBox(height: 12),
           Text(
-            'Noch keine aktive Einladung',
+            'Einladung erstellen',
             textAlign: TextAlign.center,
             style: theme.textTheme.titleMedium?.copyWith(
               fontWeight: FontWeight.w700,
@@ -269,7 +424,8 @@ class _EmptyInvitationCard extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            'Erstelle einen Code, um jemanden in eure Familie einzuladen.',
+            'FamilyLog erstellt einen einmalig '
+            'verwendbaren Einladungscode für diese Person.',
             textAlign: TextAlign.center,
             style: theme.textTheme.bodyMedium?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
@@ -289,8 +445,8 @@ class _EmptyInvitationCard extends StatelessWidget {
                   : const Icon(Icons.add_link),
               label: Text(
                 isCreating
-                    ? 'Code wird erstellt...'
-                    : 'Einladungscode erstellen',
+                    ? 'Einladung wird erstellt...'
+                    : 'Einladung erstellen',
               ),
             ),
           ),
@@ -304,18 +460,18 @@ class _InvitationCard extends StatelessWidget {
   const _InvitationCard({
     required this.invitation,
     required this.familyName,
-    required this.isRevoking,
+    required this.role,
     required this.onCopy,
     required this.onShare,
-    required this.onRevoke,
+    required this.onCreateAnother,
   });
 
   final FamilyInvitation invitation;
   final String familyName;
-  final bool isRevoking;
+  final FamilyInvitationRole role;
   final VoidCallback onCopy;
   final VoidCallback onShare;
-  final VoidCallback onRevoke;
+  final VoidCallback onCreateAnother;
 
   @override
   Widget build(BuildContext context) {
@@ -329,26 +485,54 @@ class _InvitationCard extends StatelessWidget {
       ),
       child: Column(
         children: [
+          Icon(
+            Icons.check_circle_outline,
+            size: 42,
+            color: theme.colorScheme.primary,
+          ),
+          const SizedBox(height: 12),
           Text(
-            'DEIN EINLADUNGSCODE',
+            'Einladung bereit',
+            style: theme.textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            role.label,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 24),
+          Text(
+            'EINLADUNGSCODE',
             style: theme.textTheme.labelMedium?.copyWith(
               color: theme.colorScheme.primary,
               fontWeight: FontWeight.w700,
               letterSpacing: 1,
             ),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 12),
           SelectableText(
-            invitation.code,
+            invitation.manualCode,
             textAlign: TextAlign.center,
             style: theme.textTheme.headlineMedium?.copyWith(
               fontWeight: FontWeight.w800,
               letterSpacing: 2,
             ),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 6),
           Text(
-            _expirationText(invitation),
+            'Zum manuellen Eingeben',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            _expirationText(invitation.expiresAt),
+            textAlign: TextAlign.center,
             style: theme.textTheme.bodyMedium?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
@@ -361,6 +545,7 @@ class _InvitationCard extends StatelessWidget {
               borderRadius: BorderRadius.circular(20),
             ),
             child: QrImageView(
+              // Bewusst der lange sichere Token.
               data: invitation.code,
               version: QrVersions.auto,
               size: 210,
@@ -369,7 +554,7 @@ class _InvitationCard extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           Text(
-            'QR-Code scannen',
+            'Mit FamilyLog scannen',
             style: theme.textTheme.bodyMedium?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
@@ -389,18 +574,16 @@ class _InvitationCard extends StatelessWidget {
             child: FilledButton.tonalIcon(
               onPressed: onCopy,
               icon: const Icon(Icons.copy_outlined),
-              label: const Text('Code kopieren'),
+              label: const Text('Einladungscode kopieren'),
             ),
           ),
           const SizedBox(height: 8),
           SizedBox(
             width: double.infinity,
             child: TextButton.icon(
-              onPressed: isRevoking ? null : onRevoke,
-              icon: const Icon(Icons.link_off),
-              label: Text(
-                isRevoking ? 'Wird widerrufen...' : 'Einladung widerrufen',
-              ),
+              onPressed: onCreateAnother,
+              icon: const Icon(Icons.person_add_alt_1),
+              label: const Text('Weitere Person einladen'),
             ),
           ),
         ],
@@ -408,13 +591,7 @@ class _InvitationCard extends StatelessWidget {
     );
   }
 
-  String _expirationText(FamilyInvitation invitation) {
-    final expiresAt = invitation.expiresAt;
-
-    if (expiresAt == null) {
-      return 'Ohne Ablaufdatum';
-    }
-
+  String _expirationText(DateTime expiresAt) {
     const months = [
       'Januar',
       'Februar',
@@ -430,8 +607,13 @@ class _InvitationCard extends StatelessWidget {
       'Dezember',
     ];
 
-    return 'Gültig bis ${expiresAt.day}. '
-        '${months[expiresAt.month - 1]} ${expiresAt.year}';
+    final localExpiresAt = expiresAt.toLocal();
+
+    return 'Gültig bis ${localExpiresAt.day}. '
+        '${months[localExpiresAt.month - 1]} '
+        '${localExpiresAt.year}, '
+        '${localExpiresAt.hour.toString().padLeft(2, '0')}:'
+        '${localExpiresAt.minute.toString().padLeft(2, '0')} Uhr';
   }
 }
 

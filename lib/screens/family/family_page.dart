@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import 'manage_family_page.dart';
 import '../../models/family/backend_family_member.dart';
 import '../../stores/backend_family_store.dart';
+import 'invite_family_member_page.dart';
+import 'manage_family_page.dart';
 
 class FamilyPage extends StatefulWidget {
   const FamilyPage({super.key, required this.backendFamilyStore});
@@ -108,7 +109,7 @@ class _FamilyPageState extends State<FamilyPage> {
                 child: Center(child: CircularProgressIndicator()),
               )
             else if (members.isEmpty)
-              _EmptyMembersCard()
+              const _EmptyMembersCard()
             else
               ...members.map(
                 (member) => Padding(
@@ -121,7 +122,7 @@ class _FamilyPageState extends State<FamilyPage> {
               ),
             const SizedBox(height: 8),
             FilledButton.icon(
-              onPressed: _showAddMemberInfo,
+              onPressed: _openInviteFamilyMember,
               icon: const Icon(Icons.person_add_alt_1),
               label: const Text('Mitglied hinzufügen'),
             ),
@@ -147,53 +148,22 @@ class _FamilyPageState extends State<FamilyPage> {
     );
   }
 
+  Future<void> _openInviteFamilyMember() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) {
+          return InviteFamilyMemberPage(
+            backendFamilyStore: widget.backendFamilyStore,
+          );
+        },
+      ),
+    );
+  }
+
   bool _isCurrentUser(BackendFamilyMember member) {
     final currentUserId = Supabase.instance.client.auth.currentUser?.id;
 
     return currentUserId != null && member.userId == currentUserId;
-  }
-
-  Future<void> _showAddMemberInfo() async {
-    await showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      builder: (context) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.cloud_outlined, size: 42),
-                const SizedBox(height: 16),
-                Text(
-                  'Mitglieder über Supabase',
-                  style: Theme.of(context).textTheme.titleLarge
-                      ?.copyWith(fontWeight: FontWeight.w700),
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'Als Nächstes bauen wir hier das echte Einladen '
-                  'von FamilyLog-Nutzern und das Anlegen von '
-                  'Familienmitgliedern ohne eigenen Account ein.',
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 20),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton(
-                    onPressed: () {
-                      Navigator.of(context).pop();
-                    },
-                    child: const Text('OK'),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
   }
 }
 
@@ -286,6 +256,8 @@ class _FamilyHeader extends StatelessWidget {
 }
 
 class _EmptyMembersCard extends StatelessWidget {
+  const _EmptyMembersCard();
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);

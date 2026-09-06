@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import '../models/family/backend_family_member.dart';
 import '../models/family/backend_family_space.dart';
+import '../models/family/family_invitation.dart';
 import '../services/family/family_space_service.dart';
 
 class BackendFamilyStore extends ChangeNotifier {
@@ -18,6 +19,8 @@ class BackendFamilyStore extends ChangeNotifier {
   bool _isLoading = false;
   bool _isLoadingMembers = false;
   bool _isUpdatingFamilyImage = false;
+  bool _isCreatingInvitation = false;
+  bool _isJoiningFamily = false;
 
   String? _error;
   String? _selectedFamilyId;
@@ -30,6 +33,8 @@ class BackendFamilyStore extends ChangeNotifier {
   bool get isLoading => _isLoading;
   bool get isLoadingMembers => _isLoadingMembers;
   bool get isUpdatingFamilyImage => _isUpdatingFamilyImage;
+  bool get isCreatingInvitation => _isCreatingInvitation;
+  bool get isJoiningFamily => _isJoiningFamily;
 
   String? get error => _error;
   String? get selectedFamilyId => _selectedFamilyId;
@@ -207,6 +212,89 @@ class BackendFamilyStore extends ChangeNotifier {
     }
   }
 
+  Future<FamilyInvitation> createInvitation({
+    FamilyInvitationRole role = FamilyInvitationRole.adult,
+  }) async {
+    final familyId = _selectedFamilyId;
+
+    if (familyId == null) {
+      throw StateError('Keine Familie ausgewählt.');
+    }
+
+    _isCreatingInvitation = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      return await _familySpaceService.createFamilyInvitation(
+        familyId: familyId,
+        role: role,
+      );
+    } catch (error) {
+      _error = error.toString();
+      rethrow;
+    } finally {
+      _isCreatingInvitation = false;
+      notifyListeners();
+    }
+  }
+
+  Future<FamilyInvitationPreview> previewInvitation(String code) async {
+    _error = null;
+
+    try {
+      return await _familySpaceService.getFamilyInvitationPreview(code);
+    } catch (error) {
+      _error = error.toString();
+      notifyListeners();
+      rethrow;
+    }
+  }
+
+  Future<String> joinFamilyWithInvitation(String code) async {
+    _isJoiningFamily = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final familyId = await _familySpaceService.joinFamilyWithInvitation(code);
+
+      final families = await _familySpaceService.getMyFamilySpaces();
+
+      _familySpaces
+        ..clear()
+        ..addAll(families);
+
+      final joinedFamilyExists = _familySpaces.any(
+        (family) => family.id == familyId,
+      );
+
+      if (joinedFamilyExists) {
+        _selectedFamilyId = familyId;
+      } else if (_familySpaces.isNotEmpty) {
+        _selectedFamilyId = _familySpaces.first.id;
+      } else {
+        _selectedFamilyId = null;
+      }
+
+      _members.clear();
+      _selectedFamilyImageUrl = null;
+
+      if (_selectedFamilyId != null) {
+        await _loadSelectedFamilyMembers();
+        await _loadSelectedFamilyImage();
+      }
+
+      return familyId;
+    } catch (error) {
+      _error = error.toString();
+      rethrow;
+    } finally {
+      _isJoiningFamily = false;
+      notifyListeners();
+    }
+  }
+
   Future<void> uploadSelectedFamilyImage(File imageFile) async {
     final familyId = _selectedFamilyId;
 
@@ -301,6 +389,8 @@ class BackendFamilyStore extends ChangeNotifier {
     _isLoading = false;
     _isLoadingMembers = false;
     _isUpdatingFamilyImage = false;
+    _isCreatingInvitation = false;
+    _isJoiningFamily = false;
 
     notifyListeners();
   }

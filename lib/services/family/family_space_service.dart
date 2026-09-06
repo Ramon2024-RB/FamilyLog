@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../models/family/backend_family_member.dart';
 import '../../models/family/backend_family_space.dart';
+import '../../models/family/family_invitation.dart';
 
 class FamilySpaceService {
   FamilySpaceService({SupabaseClient? client})
@@ -116,6 +117,89 @@ class FamilySpaceService {
         .single();
 
     return BackendFamilySpace.fromMap(response);
+  }
+
+  Future<FamilyInvitation> createFamilyInvitation({
+    required String familyId,
+    FamilyInvitationRole role = FamilyInvitationRole.adult,
+  }) async {
+    final user = _client.auth.currentUser;
+
+    if (user == null) {
+      throw StateError('Kein Benutzer angemeldet.');
+    }
+
+    final response = await _client.rpc(
+      'create_family_invitation',
+      params: {
+        'target_family_id': familyId,
+        'invitation_role': role.databaseValue,
+      },
+    );
+
+    if (response is! List || response.isEmpty) {
+      throw StateError('Die Einladung konnte nicht erstellt werden.');
+    }
+
+    final data = Map<String, dynamic>.from(response.first as Map);
+
+    return FamilyInvitation.fromMap(data);
+  }
+
+  Future<FamilyInvitationPreview> getFamilyInvitationPreview(
+    String code,
+  ) async {
+    final user = _client.auth.currentUser;
+
+    if (user == null) {
+      throw StateError('Kein Benutzer angemeldet.');
+    }
+
+    final normalizedCode = code.trim();
+
+    if (normalizedCode.isEmpty) {
+      throw ArgumentError('Der Einladungscode darf nicht leer sein.');
+    }
+
+    final response = await _client.rpc(
+      'get_family_invitation_preview',
+      params: {'invitation_code': normalizedCode},
+    );
+
+    if (response is! List || response.isEmpty) {
+      throw StateError('Die Einladung konnte nicht gefunden werden.');
+    }
+
+    final data = Map<String, dynamic>.from(response.first as Map);
+
+    return FamilyInvitationPreview.fromMap(data);
+  }
+
+  Future<String> joinFamilyWithInvitation(String code) async {
+    final user = _client.auth.currentUser;
+
+    if (user == null) {
+      throw StateError('Kein Benutzer angemeldet.');
+    }
+
+    final normalizedCode = code.trim();
+
+    if (normalizedCode.isEmpty) {
+      throw ArgumentError('Der Einladungscode darf nicht leer sein.');
+    }
+
+    final response = await _client.rpc(
+      'join_family_with_invitation',
+      params: {'invitation_code': normalizedCode},
+    );
+
+    if (response == null) {
+      throw StateError(
+        'Der Beitritt zur Familie konnte nicht abgeschlossen werden.',
+      );
+    }
+
+    return response.toString();
   }
 
   Future<BackendFamilySpace> uploadFamilyImage({

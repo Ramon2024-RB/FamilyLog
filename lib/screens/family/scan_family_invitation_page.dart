@@ -124,7 +124,7 @@ class _ScanFamilyInvitationPageState extends State<ScanFamilyInvitationPage> {
 
       final normalizedCode = rawValue.trim().toUpperCase();
 
-      if (_isValidFamilyLogCode(normalizedCode)) {
+      if (_isValidFamilyLogQrCode(normalizedCode)) {
         detectedCode = normalizedCode;
         break;
       }
@@ -145,7 +145,7 @@ class _ScanFamilyInvitationPageState extends State<ScanFamilyInvitationPage> {
     Navigator.of(context).pop(detectedCode);
   }
 
-  bool _isValidFamilyLogCode(String code) {
-    return RegExp(r'^FAM-[A-HJ-NP-Z2-9]{6}$').hasMatch(code);
+  bool _isValidFamilyLogQrCode(String code) {
+    return RegExp(r'^FAM-[A-F0-9]{32}$').hasMatch(code);
   }
 }

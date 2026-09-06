@@ -35,7 +35,7 @@ class _MainShellState extends State<MainShell> {
       const ChatPage(),
       const CalendarPage(),
       FamilyPage(backendFamilyStore: widget.backendFamilyStore),
-      const MorePage(),
+      MorePage(backendFamilyStore: widget.backendFamilyStore),
     ];
 
     return Scaffold(

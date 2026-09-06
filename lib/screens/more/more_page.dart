@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 
+import '../../stores/backend_family_store.dart';
 import '../family/join_family_page.dart';
 
 class MorePage extends StatelessWidget {
-  const MorePage({super.key});
+  const MorePage({super.key, required this.backendFamilyStore});
+
+  final BackendFamilyStore backendFamilyStore;
 
   @override
   Widget build(BuildContext context) {
@@ -46,7 +49,9 @@ class MorePage extends StatelessWidget {
               Navigator.of(context).push(
                 MaterialPageRoute(
                   builder: (context) {
-                    return const JoinFamilyPage();
+                    return JoinFamilyPage(
+                      backendFamilyStore: backendFamilyStore,
+                    );
                   },
                 ),
               );

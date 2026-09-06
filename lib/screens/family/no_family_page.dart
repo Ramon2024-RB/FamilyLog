@@ -122,7 +122,7 @@ class NoFamilyPage extends StatelessWidget {
     await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (context) {
-          return const JoinFamilyPage();
+          return JoinFamilyPage(backendFamilyStore: backendFamilyStore);
         },
       ),
     );
