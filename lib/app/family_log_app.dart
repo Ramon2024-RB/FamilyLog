@@ -7,10 +7,11 @@ import '../models/profile/user_profile.dart';
 import '../screens/auth/auth_welcome_page.dart';
 import '../screens/auth/sign_in_page.dart';
 import '../screens/auth/sign_up_page.dart';
+import '../screens/family/no_family_page.dart';
 import '../screens/main/main_shell.dart';
 import '../services/auth/auth_service.dart';
 import '../services/profile/profile_service.dart';
-import '../stores/family_store.dart';
+import '../stores/backend_family_store.dart';
 
 class FamilyLogApp extends StatefulWidget {
   const FamilyLogApp({super.key});
@@ -22,7 +23,7 @@ class FamilyLogApp extends StatefulWidget {
 class _FamilyLogAppState extends State<FamilyLogApp> {
   final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
 
-  late final FamilyStore _familyStore;
+  late final BackendFamilyStore _backendFamilyStore;
   late final AuthService _authService;
   late final ProfileService _profileService;
   late final StreamSubscription<AuthState> _authSubscription;
@@ -35,8 +36,8 @@ class _FamilyLogAppState extends State<FamilyLogApp> {
   void initState() {
     super.initState();
 
-    _familyStore = FamilyStore();
-    _familyStore.initialize();
+    _backendFamilyStore = BackendFamilyStore();
+    _backendFamilyStore.addListener(_handleBackendFamilyStoreChanged);
 
     _authService = AuthService();
     _profileService = ProfileService();
@@ -46,14 +47,18 @@ class _FamilyLogAppState extends State<FamilyLogApp> {
     });
 
     if (_authService.isSignedIn) {
-      _loadCurrentProfile();
+      _loadSignedInData();
     }
   }
 
   @override
   void dispose() {
     _authSubscription.cancel();
-    _familyStore.dispose();
+
+    _backendFamilyStore.removeListener(_handleBackendFamilyStoreChanged);
+
+    _backendFamilyStore.dispose();
+
     super.dispose();
   }
 
@@ -90,7 +95,7 @@ class _FamilyLogAppState extends State<FamilyLogApp> {
       return AuthWelcomePage(onSignIn: _openSignIn, onSignUp: _openSignUp);
     }
 
-    if (_isLoadingProfile) {
+    if (_isLoadingProfile || _backendFamilyStore.isLoading) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
@@ -106,14 +111,14 @@ class _FamilyLogAppState extends State<FamilyLogApp> {
                   const Icon(Icons.error_outline, size: 48),
                   const SizedBox(height: 16),
                   const Text(
-                    'Profil konnte nicht geladen werden.',
+                    'Daten konnten nicht geladen werden.',
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 8),
                   Text(_profileError!, textAlign: TextAlign.center),
                   const SizedBox(height: 20),
                   FilledButton(
-                    onPressed: _loadCurrentProfile,
+                    onPressed: _loadSignedInData,
                     child: const Text('Erneut versuchen'),
                   ),
                 ],
@@ -139,7 +144,7 @@ class _FamilyLogAppState extends State<FamilyLogApp> {
                   ),
                   const SizedBox(height: 20),
                   FilledButton(
-                    onPressed: _loadCurrentProfile,
+                    onPressed: _loadSignedInData,
                     child: const Text('Erneut versuchen'),
                   ),
                 ],
@@ -150,14 +155,20 @@ class _FamilyLogAppState extends State<FamilyLogApp> {
       );
     }
 
+    if (!_backendFamilyStore.hasFamilies) {
+      return NoFamilyPage(backendFamilyStore: _backendFamilyStore);
+    }
+
     return MainShell(
-      familyStore: _familyStore,
+      backendFamilyStore: _backendFamilyStore,
       currentProfile: _currentProfile!,
     );
   }
 
   Future<void> _handleAuthStateChanged() async {
     if (!_authService.isSignedIn) {
+      _backendFamilyStore.clear();
+
       if (!mounted) {
         return;
       }
@@ -171,10 +182,10 @@ class _FamilyLogAppState extends State<FamilyLogApp> {
       return;
     }
 
-    await _loadCurrentProfile();
+    await _loadSignedInData();
   }
 
-  Future<void> _loadCurrentProfile() async {
+  Future<void> _loadSignedInData() async {
     if (!_authService.isSignedIn) {
       return;
     }
@@ -186,6 +197,24 @@ class _FamilyLogAppState extends State<FamilyLogApp> {
 
     try {
       final profile = await _profileService.getCurrentProfile();
+
+      if (profile == null) {
+        if (!mounted) {
+          return;
+        }
+
+        setState(() {
+          _currentProfile = null;
+        });
+
+        return;
+      }
+
+      await _backendFamilyStore.loadFamilySpaces();
+
+      if (_backendFamilyStore.error != null) {
+        throw StateError(_backendFamilyStore.error!);
+      }
 
       if (!mounted) {
         return;
@@ -209,6 +238,14 @@ class _FamilyLogAppState extends State<FamilyLogApp> {
         });
       }
     }
+  }
+
+  void _handleBackendFamilyStoreChanged() {
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {});
   }
 
   void _openSignIn() {

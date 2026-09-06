@@ -30,17 +30,26 @@ class FamilyStore extends ChangeNotifier {
     return _invitations.where((invitation) => invitation.isUsable).toList();
   }
 
+  FamilyProfile? get profileOrNull => _profile;
+
+  bool get hasLocalFamily => _profile != null;
+
   FamilyProfile get profile {
-    return _profile ??
-        const FamilyProfile(
-          id: 'family_vidal',
-          name: 'Familie Vidal',
-          description: 'Unser gemeinsamer Familienraum',
-        );
+    final currentProfile = _profile;
+
+    if (currentProfile == null) {
+      throw StateError('Es ist keine lokale Familie geladen.');
+    }
+
+    return currentProfile;
   }
 
-  FamilySpace get family {
-    final currentProfile = profile;
+  FamilySpace? get familyOrNull {
+    final currentProfile = _profile;
+
+    if (currentProfile == null) {
+      return null;
+    }
 
     return FamilySpace(
       id: currentProfile.id,
@@ -51,41 +60,43 @@ class FamilyStore extends ChangeNotifier {
     );
   }
 
+  FamilySpace get family {
+    final currentFamily = familyOrNull;
+
+    if (currentFamily == null) {
+      throw StateError('Es ist keine lokale Familie geladen.');
+    }
+
+    return currentFamily;
+  }
+
   int get memberCount => _members.length;
 
   Future<void> initialize() async {
     _isLoading = true;
     notifyListeners();
 
-    final storedMembers = await _database.getFamilyMembers();
-    final storedProfile = await _database.getFamilyProfile();
+    try {
+      final storedMembers = await _database.getFamilyMembers();
+      final storedProfile = await _database.getFamilyProfile();
 
-    if (storedMembers.isEmpty) {
-      final initialMembers = _createInitialMembers();
-
-      await _database.insertInitialFamilyMembers(initialMembers);
-
-      _members
-        ..clear()
-        ..addAll(initialMembers);
-    } else {
       _members
         ..clear()
         ..addAll(storedMembers);
+
+      _profile = storedProfile;
+
+      final storedInvitations = await _database.getFamilyInvitations(
+        storedProfile.id,
+      );
+
+      _invitations
+        ..clear()
+        ..addAll(storedInvitations);
+    } finally {
+      _isLoading = false;
+      notifyListeners();
     }
-
-    _profile = storedProfile;
-
-    final storedInvitations = await _database.getFamilyInvitations(
-      storedProfile.id,
-    );
-
-    _invitations
-      ..clear()
-      ..addAll(storedInvitations);
-
-    _isLoading = false;
-    notifyListeners();
   }
 
   Future<void> addMember(FamilyMember member) async {
@@ -137,11 +148,17 @@ class FamilyStore extends ChangeNotifier {
   }
 
   Future<FamilyInvitation> createInvitation() async {
+    final currentProfile = _profile;
+
+    if (currentProfile == null) {
+      throw StateError('Ohne Familie kann keine Einladung erstellt werden.');
+    }
+
     final now = DateTime.now();
 
     final invitation = FamilyInvitation(
       id: 'invitation_${now.microsecondsSinceEpoch}',
-      familyId: profile.id,
+      familyId: currentProfile.id,
       code: _generateInvitationCode(),
       createdAt: now,
       expiresAt: now.add(const Duration(days: 7)),
@@ -191,35 +208,5 @@ class FamilyStore extends ChangeNotifier {
     ).join();
 
     return 'FAM-$code';
-  }
-
-  List<FamilyMember> _createInitialMembers() {
-    return const [
-      FamilyMember(
-        id: 'ramon',
-        firstName: 'Ramon',
-        lastName: 'Vidal',
-        role: FamilyMemberRole.owner,
-        isCurrentUser: true,
-      ),
-      FamilyMember(
-        id: 'lara',
-        firstName: 'Lara',
-        lastName: 'Vidal',
-        role: FamilyMemberRole.admin,
-      ),
-      FamilyMember(
-        id: 'alex',
-        firstName: 'Alex',
-        lastName: 'Vidal',
-        role: FamilyMemberRole.child,
-      ),
-      FamilyMember(
-        id: 'oma',
-        firstName: 'Oma',
-        lastName: '',
-        role: FamilyMemberRole.senior,
-      ),
-    ];
   }
 }

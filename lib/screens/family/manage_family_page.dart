@@ -1,17 +1,11 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
-import 'package:path/path.dart' as path;
-import 'package:path_provider/path_provider.dart';
 
-import '../../models/family/family_profile.dart';
-import '../../stores/family_store.dart';
+import '../../stores/backend_family_store.dart';
 
 class ManageFamilyPage extends StatefulWidget {
-  const ManageFamilyPage({super.key, required this.familyStore});
+  const ManageFamilyPage({super.key, required this.backendFamilyStore});
 
-  final FamilyStore familyStore;
+  final BackendFamilyStore backendFamilyStore;
 
   @override
   State<ManageFamilyPage> createState() => _ManageFamilyPageState();
@@ -19,26 +13,23 @@ class ManageFamilyPage extends StatefulWidget {
 
 class _ManageFamilyPageState extends State<ManageFamilyPage> {
   final _formKey = GlobalKey<FormState>();
-  final _imagePicker = ImagePicker();
 
   late final TextEditingController _nameController;
   late final TextEditingController _descriptionController;
 
-  String? _imagePath;
   bool _isSaving = false;
-  bool _isPickingImage = false;
 
   @override
   void initState() {
     super.initState();
 
-    final profile = widget.familyStore.profile;
+    final family = widget.backendFamilyStore.selectedFamily;
 
-    _nameController = TextEditingController(text: profile.name);
+    _nameController = TextEditingController(text: family?.name ?? '');
 
-    _descriptionController = TextEditingController(text: profile.description);
-
-    _imagePath = profile.imagePath;
+    _descriptionController = TextEditingController(
+      text: family?.description ?? '',
+    );
   }
 
   @override
@@ -52,6 +43,14 @@ class _ManageFamilyPageState extends State<ManageFamilyPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final family = widget.backendFamilyStore.selectedFamily;
+
+    if (family == null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Familie verwalten')),
+        body: const Center(child: Text('Keine Familie ausgewählt.')),
+      );
+    }
 
     return Scaffold(
       appBar: AppBar(title: const Text('Familie verwalten')),
@@ -61,40 +60,18 @@ class _ManageFamilyPageState extends State<ManageFamilyPage> {
           padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
           children: [
             Center(
-              child: Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  _FamilyImage(imagePath: _imagePath),
-                  Positioned(
-                    right: -4,
-                    bottom: -4,
-                    child: Material(
-                      color: theme.colorScheme.primary,
-                      shape: const CircleBorder(),
-                      child: InkWell(
-                        customBorder: const CircleBorder(),
-                        onTap: _isPickingImage ? null : _pickImage,
-                        child: Padding(
-                          padding: const EdgeInsets.all(10),
-                          child: _isPickingImage
-                              ? SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: theme.colorScheme.onPrimary,
-                                  ),
-                                )
-                              : Icon(
-                                  Icons.photo_camera_outlined,
-                                  size: 20,
-                                  color: theme.colorScheme.onPrimary,
-                                ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
+              child: Container(
+                width: 112,
+                height: 112,
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.primaryContainer,
+                  borderRadius: BorderRadius.circular(32),
+                ),
+                child: Icon(
+                  Icons.family_restroom,
+                  size: 52,
+                  color: theme.colorScheme.primary,
+                ),
               ),
             ),
             const SizedBox(height: 16),
@@ -106,23 +83,15 @@ class _ManageFamilyPageState extends State<ManageFamilyPage> {
               ),
             ),
             const SizedBox(height: 8),
-            TextButton.icon(
-              onPressed: _isPickingImage ? null : _pickImage,
-              icon: const Icon(Icons.photo_library_outlined),
-              label: Text(
-                _imagePath == null
-                    ? 'Familienbild auswählen'
-                    : 'Familienbild ändern',
+            Text(
+              'Das Familienbild richten wir anschließend '
+              'über den gemeinsamen Cloud-Speicher ein.',
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
               ),
             ),
-            if (_imagePath != null) ...[
-              TextButton.icon(
-                onPressed: _isPickingImage ? null : _removeImage,
-                icon: const Icon(Icons.delete_outline),
-                label: const Text('Familienbild entfernen'),
-              ),
-            ],
-            const SizedBox(height: 24),
+            const SizedBox(height: 28),
             TextFormField(
               controller: _nameController,
               textCapitalization: TextCapitalization.words,
@@ -159,7 +128,7 @@ class _ManageFamilyPageState extends State<ManageFamilyPage> {
             ),
             const SizedBox(height: 28),
             FilledButton.icon(
-              onPressed: _isSaving || _isPickingImage ? null : _save,
+              onPressed: _isSaving ? null : _save,
               icon: _isSaving
                   ? const SizedBox(
                       width: 18,
@@ -184,12 +153,17 @@ class _ManageFamilyPageState extends State<ManageFamilyPage> {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(Icons.info_outline, color: theme.colorScheme.primary),
+                  Icon(
+                    Icons.cloud_done_outlined,
+                    color: theme.colorScheme.primary,
+                  ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
-                      'Diese Angaben gelten für euren gemeinsamen '
-                      'Familienraum und werden allen Mitgliedern angezeigt.',
+                      'Familienname und Beschreibung werden '
+                      'im gemeinsamen Familienraum gespeichert '
+                      'und stehen damit allen berechtigten '
+                      'Familienmitgliedern zur Verfügung.',
                       style: theme.textTheme.bodyMedium?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant,
                       ),
@@ -204,81 +178,6 @@ class _ManageFamilyPageState extends State<ManageFamilyPage> {
     );
   }
 
-  Future<void> _pickImage() async {
-    setState(() {
-      _isPickingImage = true;
-    });
-
-    try {
-      final pickedImage = await _imagePicker.pickImage(
-        source: ImageSource.gallery,
-        imageQuality: 85,
-        maxWidth: 1600,
-      );
-
-      if (pickedImage == null) {
-        return;
-      }
-
-      final savedImagePath = await _copyImageToAppStorage(pickedImage);
-
-      if (!mounted) {
-        return;
-      }
-
-      setState(() {
-        _imagePath = savedImagePath;
-      });
-    } catch (error) {
-      if (!mounted) {
-        return;
-      }
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Das Familienbild konnte nicht ausgewählt werden.'),
-        ),
-      );
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isPickingImage = false;
-        });
-      }
-    }
-  }
-
-  Future<String> _copyImageToAppStorage(XFile pickedImage) async {
-    final documentsDirectory = await getApplicationDocumentsDirectory();
-
-    final familyImagesDirectory = Directory(
-      path.join(documentsDirectory.path, 'family_images'),
-    );
-
-    if (!await familyImagesDirectory.exists()) {
-      await familyImagesDirectory.create(recursive: true);
-    }
-
-    final extension = path.extension(pickedImage.path).isEmpty
-        ? '.jpg'
-        : path.extension(pickedImage.path);
-
-    final fileName =
-        'family_${DateTime.now().millisecondsSinceEpoch}$extension';
-
-    final destinationPath = path.join(familyImagesDirectory.path, fileName);
-
-    final savedImage = await File(pickedImage.path).copy(destinationPath);
-
-    return savedImage.path;
-  }
-
-  void _removeImage() {
-    setState(() {
-      _imagePath = null;
-    });
-  }
-
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) {
       return;
@@ -289,16 +188,10 @@ class _ManageFamilyPageState extends State<ManageFamilyPage> {
     });
 
     try {
-      final currentProfile = widget.familyStore.profile;
-
-      final updatedProfile = FamilyProfile(
-        id: currentProfile.id,
+      await widget.backendFamilyStore.updateSelectedFamily(
         name: _nameController.text.trim(),
         description: _descriptionController.text.trim(),
-        imagePath: _imagePath,
       );
-
-      await widget.familyStore.updateFamilyProfile(updatedProfile);
 
       if (!mounted) {
         return;
@@ -320,47 +213,5 @@ class _ManageFamilyPageState extends State<ManageFamilyPage> {
         ),
       );
     }
-  }
-}
-
-class _FamilyImage extends StatelessWidget {
-  const _FamilyImage({required this.imagePath});
-
-  final String? imagePath;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final currentImagePath = imagePath;
-
-    final hasImage =
-        currentImagePath != null && File(currentImagePath).existsSync();
-
-    return Container(
-      width: 112,
-      height: 112,
-      decoration: BoxDecoration(
-        color: theme.colorScheme.primaryContainer,
-        borderRadius: BorderRadius.circular(32),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: hasImage
-          ? Image.file(
-              File(currentImagePath),
-              fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) {
-                return Icon(
-                  Icons.family_restroom,
-                  size: 52,
-                  color: theme.colorScheme.primary,
-                );
-              },
-            )
-          : Icon(
-              Icons.family_restroom,
-              size: 52,
-              color: theme.colorScheme.primary,
-            ),
-    );
   }
 }

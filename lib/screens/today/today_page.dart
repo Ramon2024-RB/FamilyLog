@@ -1,18 +1,16 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 
 import '../../models/profile/user_profile.dart';
-import '../../stores/family_store.dart';
+import '../../stores/backend_family_store.dart';
 
 class TodayPage extends StatefulWidget {
   const TodayPage({
     super.key,
-    required this.familyStore,
+    required this.backendFamilyStore,
     required this.currentProfile,
   });
 
-  final FamilyStore familyStore;
+  final BackendFamilyStore backendFamilyStore;
   final UserProfile currentProfile;
 
   @override
@@ -23,22 +21,22 @@ class _TodayPageState extends State<TodayPage> {
   @override
   void initState() {
     super.initState();
-    widget.familyStore.addListener(_onFamilyChanged);
+    widget.backendFamilyStore.addListener(_onFamilyChanged);
   }
 
   @override
   void didUpdateWidget(covariant TodayPage oldWidget) {
     super.didUpdateWidget(oldWidget);
 
-    if (oldWidget.familyStore != widget.familyStore) {
-      oldWidget.familyStore.removeListener(_onFamilyChanged);
-      widget.familyStore.addListener(_onFamilyChanged);
+    if (oldWidget.backendFamilyStore != widget.backendFamilyStore) {
+      oldWidget.backendFamilyStore.removeListener(_onFamilyChanged);
+      widget.backendFamilyStore.addListener(_onFamilyChanged);
     }
   }
 
   @override
   void dispose() {
-    widget.familyStore.removeListener(_onFamilyChanged);
+    widget.backendFamilyStore.removeListener(_onFamilyChanged);
     super.dispose();
   }
 
@@ -53,7 +51,8 @@ class _TodayPageState extends State<TodayPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final family = widget.familyStore.family;
+    final family = widget.backendFamilyStore.selectedFamily;
+    final members = widget.backendFamilyStore.members;
     final now = DateTime.now();
 
     return Scaffold(
@@ -67,133 +66,148 @@ class _TodayPageState extends State<TodayPage> {
           ),
         ],
       ),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
-        children: [
-          Text(
-            _greetingFor(now),
-            style: theme.textTheme.headlineMedium?.copyWith(
-              fontWeight: FontWeight.w700,
+      body: RefreshIndicator(
+        onRefresh: () async {
+          await widget.backendFamilyStore.loadFamilySpaces();
+        },
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
+          children: [
+            Text(
+              _greetingFor(now),
+              style: theme.textTheme.headlineMedium?.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
             ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            _formatDate(now),
-            style: theme.textTheme.labelLarge?.copyWith(
-              color: theme.colorScheme.primary,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.8,
+            const SizedBox(height: 6),
+            Text(
+              _formatDate(now),
+              style: theme.textTheme.labelLarge?.copyWith(
+                color: theme.colorScheme.primary,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.8,
+              ),
             ),
-          ),
-          const SizedBox(height: 24),
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: theme.colorScheme.primaryContainer,
-              borderRadius: BorderRadius.circular(24),
-            ),
-            child: Row(
-              children: [
-                _FamilyImage(imagePath: family.imagePath),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        family.name,
-                        style: theme.textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '${family.memberCount} Mitglieder',
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: theme.colorScheme.onPrimaryContainer,
-                        ),
-                      ),
-                    ],
-                  ),
+            const SizedBox(height: 24),
+            if (family != null)
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.primaryContainer,
+                  borderRadius: BorderRadius.circular(24),
                 ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 28),
-          Text(
-            'Heute',
-            style: theme.textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 12),
-          const _TodayCard(
-            icon: Icons.restaurant_outlined,
-            title: 'Familienessen',
-            subtitle: '18:30 Uhr',
-          ),
-          const SizedBox(height: 10),
-          const _TodayCard(
-            icon: Icons.task_alt,
-            title: 'Spülmaschine',
-            subtitle: 'Aufgabe für heute',
-          ),
-          const SizedBox(height: 10),
-          const _TodayCard(
-            icon: Icons.shopping_cart_outlined,
-            title: 'Einkauf',
-            subtitle: '3 offene Einträge',
-          ),
-          const SizedBox(height: 28),
-          Text(
-            'Als Nächstes',
-            style: theme.textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 12),
-          const _TodayCard(
-            icon: Icons.cake_outlined,
-            title: 'Omas Geburtstag',
-            subtitle: 'In 4 Tagen',
-          ),
-          const SizedBox(height: 28),
-          Container(
-            padding: const EdgeInsets.all(18),
-            decoration: BoxDecoration(
-              color: theme.colorScheme.surface,
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Icon(Icons.shield_outlined, color: theme.colorScheme.primary),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'FamilyLog Safety',
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
+                child: Row(
+                  children: [
+                    Container(
+                      width: 58,
+                      height: 58,
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.surface.withValues(
+                          alpha: 0.75,
                         ),
+                        borderRadius: BorderRadius.circular(18),
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Schnelle Hilfe für Kinder und Senioren – '
-                        'nur wenn sie wirklich gebraucht wird.',
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
+                      child: Icon(
+                        Icons.family_restroom,
+                        color: theme.colorScheme.primary,
+                        size: 30,
                       ),
-                    ],
-                  ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            family.name,
+                            style: theme.textTheme.titleLarge?.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            members.length == 1
+                                ? '1 Mitglied'
+                                : '${members.length} Mitglieder',
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: theme.colorScheme.onPrimaryContainer,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
+            const SizedBox(height: 28),
+            Text(
+              'Heute',
+              style: theme.textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
             ),
-          ),
-        ],
+            const SizedBox(height: 12),
+            const _EmptySectionCard(
+              icon: Icons.today_outlined,
+              title: 'Heute ist noch nichts geplant',
+              subtitle:
+                  'Termine, Aufgaben und andere Familienaktivitäten '
+                  'erscheinen später hier.',
+            ),
+            const SizedBox(height: 28),
+            Text(
+              'Als Nächstes',
+              style: theme.textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 12),
+            const _EmptySectionCard(
+              icon: Icons.event_outlined,
+              title: 'Noch keine kommenden Einträge',
+              subtitle:
+                  'Sobald wir Kalender und Aufgaben anbinden, '
+                  'siehst du hier die nächsten wichtigen Dinge.',
+            ),
+            const SizedBox(height: 28),
+            Container(
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surface,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.shield_outlined, color: theme.colorScheme.primary),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'FamilyLog Safety',
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Schnelle Hilfe für Kinder und Senioren – '
+                          'nur wenn sie wirklich gebraucht wird.',
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -246,50 +260,8 @@ class _TodayPageState extends State<TodayPage> {
   }
 }
 
-class _FamilyImage extends StatelessWidget {
-  const _FamilyImage({required this.imagePath});
-
-  final String? imagePath;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final currentImagePath = imagePath;
-
-    final hasImage =
-        currentImagePath != null && File(currentImagePath).existsSync();
-
-    return Container(
-      width: 58,
-      height: 58,
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface.withValues(alpha: 0.75),
-        borderRadius: BorderRadius.circular(18),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: hasImage
-          ? Image.file(
-              File(currentImagePath),
-              fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) {
-                return Icon(
-                  Icons.family_restroom,
-                  color: theme.colorScheme.primary,
-                  size: 30,
-                );
-              },
-            )
-          : Icon(
-              Icons.family_restroom,
-              color: theme.colorScheme.primary,
-              size: 30,
-            ),
-    );
-  }
-}
-
-class _TodayCard extends StatelessWidget {
-  const _TodayCard({
+class _EmptySectionCard extends StatelessWidget {
+  const _EmptySectionCard({
     required this.icon,
     required this.title,
     required this.subtitle,
