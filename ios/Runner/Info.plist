@@ -66,5 +66,7 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+<key>NSPhotoLibraryUsageDescription</key>
+<string>FamilyLog benötigt Zugriff auf deine Fotos, damit du ein Familienbild auswählen kannst.</string>
 </dict>
 </plist>

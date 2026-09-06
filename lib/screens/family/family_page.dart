@@ -1,8 +1,11 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 
 import '../../models/family/family_member.dart';
 import '../../stores/family_store.dart';
 import 'family_member_detail_page.dart';
+import 'manage_family_page.dart';
 import 'widgets/add_family_member_dialog.dart';
 
 class FamilyPage extends StatefulWidget {
@@ -46,7 +49,7 @@ class _FamilyPageState extends State<FamilyPage> {
         actions: [
           IconButton(
             tooltip: 'Familie verwalten',
-            onPressed: () {},
+            onPressed: _openManageFamily,
             icon: const Icon(Icons.settings_outlined),
           ),
         ],
@@ -58,6 +61,7 @@ class _FamilyPageState extends State<FamilyPage> {
             familyName: family.name,
             description: family.description,
             memberCount: family.memberCount,
+            imagePath: family.imagePath,
           ),
           const SizedBox(height: 28),
           Row(
@@ -100,6 +104,16 @@ class _FamilyPageState extends State<FamilyPage> {
     );
   }
 
+  Future<void> _openManageFamily() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) {
+          return ManageFamilyPage(familyStore: widget.familyStore);
+        },
+      ),
+    );
+  }
+
   Future<void> _addMember() async {
     final member = await showDialog<FamilyMember>(
       context: context,
@@ -112,7 +126,11 @@ class _FamilyPageState extends State<FamilyPage> {
       return;
     }
 
-    widget.familyStore.addMember(member);
+    await widget.familyStore.addMember(member);
+
+    if (!mounted) {
+      return;
+    }
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('${member.fullName} wurde hinzugefügt.')),
@@ -140,7 +158,11 @@ class _FamilyPageState extends State<FamilyPage> {
           return;
         }
 
-        widget.familyStore.updateMember(updatedMember);
+        await widget.familyStore.updateMember(updatedMember);
+
+        if (!mounted) {
+          return;
+        }
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -155,7 +177,11 @@ class _FamilyPageState extends State<FamilyPage> {
           return;
         }
 
-        widget.familyStore.removeMember(deletedMember.id);
+        await widget.familyStore.removeMember(deletedMember.id);
+
+        if (!mounted) {
+          return;
+        }
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('${deletedMember.fullName} wurde entfernt.')),
@@ -169,11 +195,13 @@ class _FamilyHeader extends StatelessWidget {
     required this.familyName,
     required this.description,
     required this.memberCount,
+    required this.imagePath,
   });
 
   final String familyName;
   final String? description;
   final int memberCount;
+  final String? imagePath;
 
   @override
   Widget build(BuildContext context) {
@@ -187,19 +215,7 @@ class _FamilyHeader extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Container(
-            width: 64,
-            height: 64,
-            decoration: BoxDecoration(
-              color: theme.colorScheme.surface.withValues(alpha: 0.75),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Icon(
-              Icons.family_restroom,
-              size: 32,
-              color: theme.colorScheme.primary,
-            ),
-          ),
+          _FamilyHeaderImage(imagePath: imagePath),
           const SizedBox(width: 16),
           Expanded(
             child: Column(
@@ -211,7 +227,7 @@ class _FamilyHeader extends StatelessWidget {
                     fontWeight: FontWeight.w700,
                   ),
                 ),
-                if (description != null) ...[
+                if (description != null && description!.trim().isNotEmpty) ...[
                   const SizedBox(height: 4),
                   Text(
                     description!,
@@ -233,6 +249,48 @@ class _FamilyHeader extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _FamilyHeaderImage extends StatelessWidget {
+  const _FamilyHeaderImage({required this.imagePath});
+
+  final String? imagePath;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final currentImagePath = imagePath;
+
+    final hasImage =
+        currentImagePath != null && File(currentImagePath).existsSync();
+
+    return Container(
+      width: 72,
+      height: 72,
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface.withValues(alpha: 0.75),
+        borderRadius: BorderRadius.circular(22),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: hasImage
+          ? Image.file(
+              File(currentImagePath),
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) {
+                return Icon(
+                  Icons.family_restroom,
+                  size: 34,
+                  color: theme.colorScheme.primary,
+                );
+              },
+            )
+          : Icon(
+              Icons.family_restroom,
+              size: 34,
+              color: theme.colorScheme.primary,
+            ),
     );
   }
 }

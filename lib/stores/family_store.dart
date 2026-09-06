@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 
 import '../database/app_database.dart';
 import '../models/family/family_member.dart';
+import '../models/family/family_profile.dart';
 import '../models/family/family_space.dart';
 
 class FamilyStore extends ChangeNotifier {
@@ -12,17 +13,30 @@ class FamilyStore extends ChangeNotifier {
 
   final List<FamilyMember> _members = [];
 
+  FamilyProfile? _profile;
   bool _isLoading = true;
 
   bool get isLoading => _isLoading;
 
   List<FamilyMember> get members => List.unmodifiable(_members);
 
+  FamilyProfile get profile {
+    return _profile ??
+        const FamilyProfile(
+          id: 'family_vidal',
+          name: 'Familie Vidal',
+          description: 'Unser gemeinsamer Familienraum',
+        );
+  }
+
   FamilySpace get family {
+    final currentProfile = profile;
+
     return FamilySpace(
-      id: 'family_vidal',
-      name: 'Familie Vidal',
-      description: 'Unser gemeinsamer Familienraum',
+      id: currentProfile.id,
+      name: currentProfile.name,
+      description: currentProfile.description,
+      imagePath: currentProfile.imagePath,
       members: members,
     );
   }
@@ -34,6 +48,7 @@ class FamilyStore extends ChangeNotifier {
     notifyListeners();
 
     final storedMembers = await _database.getFamilyMembers();
+    final storedProfile = await _database.getFamilyProfile();
 
     if (storedMembers.isEmpty) {
       final initialMembers = _createInitialMembers();
@@ -48,6 +63,8 @@ class FamilyStore extends ChangeNotifier {
         ..clear()
         ..addAll(storedMembers);
     }
+
+    _profile = storedProfile;
 
     _isLoading = false;
     notifyListeners();
@@ -91,6 +108,13 @@ class FamilyStore extends ChangeNotifier {
     await _database.deleteFamilyMember(memberId);
 
     _members.removeAt(memberIndex);
+    notifyListeners();
+  }
+
+  Future<void> updateFamilyProfile(FamilyProfile updatedProfile) async {
+    await _database.saveFamilyProfile(updatedProfile);
+
+    _profile = updatedProfile;
     notifyListeners();
   }
 

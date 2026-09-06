@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 
 import '../../stores/family_store.dart';
@@ -36,6 +38,7 @@ class _TodayPageState extends State<TodayPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final family = widget.familyStore.family;
+    final now = DateTime.now();
 
     return Scaffold(
       appBar: AppBar(
@@ -52,14 +55,14 @@ class _TodayPageState extends State<TodayPage> {
         padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
         children: [
           Text(
-            'Guten Morgen',
+            _greetingFor(now),
             style: theme.textTheme.headlineMedium?.copyWith(
               fontWeight: FontWeight.w700,
             ),
           ),
           const SizedBox(height: 6),
           Text(
-            'SONNTAG, 6. SEPTEMBER',
+            _formatDate(now),
             style: theme.textTheme.labelLarge?.copyWith(
               color: theme.colorScheme.primary,
               fontWeight: FontWeight.w700,
@@ -75,19 +78,7 @@ class _TodayPageState extends State<TodayPage> {
             ),
             child: Row(
               children: [
-                Container(
-                  width: 58,
-                  height: 58,
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.surface.withValues(alpha: 0.75),
-                    borderRadius: BorderRadius.circular(18),
-                  ),
-                  child: Icon(
-                    Icons.family_restroom,
-                    color: theme.colorScheme.primary,
-                    size: 30,
-                  ),
-                ),
+                _FamilyImage(imagePath: family.imagePath),
                 const SizedBox(width: 16),
                 Expanded(
                   child: Column(
@@ -188,6 +179,94 @@ class _TodayPageState extends State<TodayPage> {
           ),
         ],
       ),
+    );
+  }
+
+  String _greetingFor(DateTime dateTime) {
+    final hour = dateTime.hour;
+
+    if (hour < 11) {
+      return 'Guten Morgen';
+    }
+
+    if (hour < 18) {
+      return 'Guten Tag';
+    }
+
+    return 'Guten Abend';
+  }
+
+  String _formatDate(DateTime dateTime) {
+    const weekdays = [
+      'MONTAG',
+      'DIENSTAG',
+      'MITTWOCH',
+      'DONNERSTAG',
+      'FREITAG',
+      'SAMSTAG',
+      'SONNTAG',
+    ];
+
+    const months = [
+      'JANUAR',
+      'FEBRUAR',
+      'MÄRZ',
+      'APRIL',
+      'MAI',
+      'JUNI',
+      'JULI',
+      'AUGUST',
+      'SEPTEMBER',
+      'OKTOBER',
+      'NOVEMBER',
+      'DEZEMBER',
+    ];
+
+    final weekday = weekdays[dateTime.weekday - 1];
+    final month = months[dateTime.month - 1];
+
+    return '$weekday, ${dateTime.day}. $month';
+  }
+}
+
+class _FamilyImage extends StatelessWidget {
+  const _FamilyImage({required this.imagePath});
+
+  final String? imagePath;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final currentImagePath = imagePath;
+
+    final hasImage =
+        currentImagePath != null && File(currentImagePath).existsSync();
+
+    return Container(
+      width: 58,
+      height: 58,
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface.withValues(alpha: 0.75),
+        borderRadius: BorderRadius.circular(18),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: hasImage
+          ? Image.file(
+              File(currentImagePath),
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) {
+                return Icon(
+                  Icons.family_restroom,
+                  color: theme.colorScheme.primary,
+                  size: 30,
+                );
+              },
+            )
+          : Icon(
+              Icons.family_restroom,
+              color: theme.colorScheme.primary,
+              size: 30,
+            ),
     );
   }
 }
