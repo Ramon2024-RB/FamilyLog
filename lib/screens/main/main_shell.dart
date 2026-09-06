@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../stores/family_store.dart';
 import '../calendar/calendar_page.dart';
 import '../chat/chat_page.dart';
 import '../family/family_page.dart';
@@ -7,7 +8,9 @@ import '../more/more_page.dart';
 import '../today/today_page.dart';
 
 class MainShell extends StatefulWidget {
-  const MainShell({super.key});
+  const MainShell({super.key, required this.familyStore});
+
+  final FamilyStore familyStore;
 
   @override
   State<MainShell> createState() => _MainShellState();
@@ -16,18 +19,18 @@ class MainShell extends StatefulWidget {
 class _MainShellState extends State<MainShell> {
   int _selectedIndex = 0;
 
-  static const List<Widget> _pages = [
-    TodayPage(),
-    ChatPage(),
-    CalendarPage(),
-    FamilyPage(),
-    MorePage(),
-  ];
-
   @override
   Widget build(BuildContext context) {
+    final pages = [
+      TodayPage(familyStore: widget.familyStore),
+      const ChatPage(),
+      const CalendarPage(),
+      FamilyPage(familyStore: widget.familyStore),
+      const MorePage(),
+    ];
+
     return Scaffold(
-      body: IndexedStack(index: _selectedIndex, children: _pages),
+      body: IndexedStack(index: _selectedIndex, children: pages),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _selectedIndex,
         onDestinationSelected: (index) {

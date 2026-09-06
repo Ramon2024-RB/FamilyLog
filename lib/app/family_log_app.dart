@@ -1,9 +1,31 @@
 import 'package:flutter/material.dart';
 
 import '../screens/main/main_shell.dart';
+import '../stores/family_store.dart';
 
-class FamilyLogApp extends StatelessWidget {
+class FamilyLogApp extends StatefulWidget {
   const FamilyLogApp({super.key});
+
+  @override
+  State<FamilyLogApp> createState() => _FamilyLogAppState();
+}
+
+class _FamilyLogAppState extends State<FamilyLogApp> {
+  late final FamilyStore _familyStore;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _familyStore = FamilyStore();
+    _familyStore.initialize();
+  }
+
+  @override
+  void dispose() {
+    _familyStore.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -28,7 +50,7 @@ class FamilyLogApp extends StatelessWidget {
           brightness: Brightness.dark,
         ),
       ),
-      home: const MainShell(),
+      home: MainShell(familyStore: _familyStore),
     );
   }
 }
