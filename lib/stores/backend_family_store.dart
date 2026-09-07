@@ -21,6 +21,7 @@ class BackendFamilyStore extends ChangeNotifier {
   bool _isUpdatingFamilyImage = false;
   bool _isCreatingInvitation = false;
   bool _isJoiningFamily = false;
+  bool _isUpdatingMember = false;
 
   String? _error;
   String? _selectedFamilyId;
@@ -35,6 +36,7 @@ class BackendFamilyStore extends ChangeNotifier {
   bool get isUpdatingFamilyImage => _isUpdatingFamilyImage;
   bool get isCreatingInvitation => _isCreatingInvitation;
   bool get isJoiningFamily => _isJoiningFamily;
+  bool get isUpdatingMember => _isUpdatingMember;
 
   String? get error => _error;
   String? get selectedFamilyId => _selectedFamilyId;
@@ -209,6 +211,48 @@ class BackendFamilyStore extends ChangeNotifier {
       _error = error.toString();
       notifyListeners();
       rethrow;
+    }
+  }
+
+  Future<void> updateMemberRole({
+    required String memberId,
+    required String role,
+  }) async {
+    _isUpdatingMember = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      await _familySpaceService.updateFamilyMemberRole(
+        memberId: memberId,
+        role: role,
+      );
+
+      await _loadSelectedFamilyMembers();
+    } catch (error) {
+      _error = error.toString();
+      rethrow;
+    } finally {
+      _isUpdatingMember = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> removeMember({required String memberId}) async {
+    _isUpdatingMember = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      await _familySpaceService.removeFamilyMember(memberId: memberId);
+
+      await _loadSelectedFamilyMembers();
+    } catch (error) {
+      _error = error.toString();
+      rethrow;
+    } finally {
+      _isUpdatingMember = false;
+      notifyListeners();
     }
   }
 
@@ -391,6 +435,7 @@ class BackendFamilyStore extends ChangeNotifier {
     _isUpdatingFamilyImage = false;
     _isCreatingInvitation = false;
     _isJoiningFamily = false;
+    _isUpdatingMember = false;
 
     notifyListeners();
   }

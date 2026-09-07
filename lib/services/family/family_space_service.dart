@@ -119,6 +119,35 @@ class FamilySpaceService {
     return BackendFamilySpace.fromMap(response);
   }
 
+  Future<void> updateFamilyMemberRole({
+    required String memberId,
+    required String role,
+  }) async {
+    final user = _client.auth.currentUser;
+
+    if (user == null) {
+      throw StateError('Kein Benutzer angemeldet.');
+    }
+
+    await _client.rpc(
+      'update_family_member_role',
+      params: {'target_family_member_id': memberId, 'new_role': role},
+    );
+  }
+
+  Future<void> removeFamilyMember({required String memberId}) async {
+    final user = _client.auth.currentUser;
+
+    if (user == null) {
+      throw StateError('Kein Benutzer angemeldet.');
+    }
+
+    await _client.rpc(
+      'remove_family_member',
+      params: {'target_family_member_id': memberId},
+    );
+  }
+
   Future<FamilyInvitation> createFamilyInvitation({
     required String familyId,
     FamilyInvitationRole role = FamilyInvitationRole.adult,
@@ -195,7 +224,8 @@ class FamilySpaceService {
 
     if (response == null) {
       throw StateError(
-        'Der Beitritt zur Familie konnte nicht abgeschlossen werden.',
+        'Der Beitritt zur Familie konnte nicht '
+        'abgeschlossen werden.',
       );
     }
 

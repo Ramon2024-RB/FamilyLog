@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../models/family/backend_family_member.dart';
 import '../../stores/backend_family_store.dart';
+import 'family_member_detail_page.dart';
 import 'invite_family_member_page.dart';
 import 'manage_family_page.dart';
 
@@ -117,6 +118,9 @@ class _FamilyPageState extends State<FamilyPage> {
                   child: _MemberCard(
                     member: member,
                     isCurrentUser: _isCurrentUser(member),
+                    onTap: () {
+                      _openMember(member);
+                    },
                   ),
                 ),
               ),
@@ -134,6 +138,26 @@ class _FamilyPageState extends State<FamilyPage> {
 
   Future<void> _refreshFamily() async {
     await widget.backendFamilyStore.loadFamilySpaces();
+  }
+
+  Future<void> _openMember(BackendFamilyMember member) async {
+    final family = widget.backendFamilyStore.selectedFamily;
+
+    if (family == null) {
+      return;
+    }
+
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) {
+          return FamilyMemberDetailPage(
+            backendFamilyStore: widget.backendFamilyStore,
+            member: member,
+            familyName: family.name,
+          );
+        },
+      ),
+    );
   }
 
   Future<void> _openManageFamily() async {
@@ -269,7 +293,8 @@ class _EmptyMembersCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
       ),
       child: const Text(
-        'In dieser Familie wurden noch keine Mitglieder gefunden.',
+        'In dieser Familie wurden noch keine '
+        'Mitglieder gefunden.',
         textAlign: TextAlign.center,
       ),
     );
@@ -277,10 +302,15 @@ class _EmptyMembersCard extends StatelessWidget {
 }
 
 class _MemberCard extends StatelessWidget {
-  const _MemberCard({required this.member, required this.isCurrentUser});
+  const _MemberCard({
+    required this.member,
+    required this.isCurrentUser,
+    required this.onTap,
+  });
 
   final BackendFamilyMember member;
   final bool isCurrentUser;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -289,78 +319,86 @@ class _MemberCard extends StatelessWidget {
     return Material(
       color: theme.colorScheme.surface,
       borderRadius: BorderRadius.circular(18),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Row(
-          children: [
-            CircleAvatar(
-              radius: 24,
-              backgroundColor: theme.colorScheme.secondaryContainer,
-              child: Text(
-                member.initials,
-                style: TextStyle(
-                  color: theme.colorScheme.onSecondaryContainer,
-                  fontWeight: FontWeight.w700,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            children: [
+              CircleAvatar(
+                radius: 24,
+                backgroundColor: theme.colorScheme.secondaryContainer,
+                child: Text(
+                  member.initials,
+                  style: TextStyle(
+                    color: theme.colorScheme.onSecondaryContainer,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Flexible(
-                        child: Text(
-                          member.fullName,
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                      if (isCurrentUser) ...[
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 3,
-                          ),
-                          decoration: BoxDecoration(
-                            color: theme.colorScheme.primaryContainer,
-                            borderRadius: BorderRadius.circular(20),
-                          ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Flexible(
                           child: Text(
-                            'Du',
-                            style: theme.textTheme.labelSmall?.copyWith(
-                              color: theme.colorScheme.primary,
+                            member.fullName,
+                            style: theme.textTheme.titleMedium?.copyWith(
                               fontWeight: FontWeight.w700,
                             ),
                           ),
                         ),
+                        if (isCurrentUser) ...[
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 3,
+                            ),
+                            decoration: BoxDecoration(
+                              color: theme.colorScheme.primaryContainer,
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Text(
+                              'Du',
+                              style: theme.textTheme.labelSmall?.copyWith(
+                                color: theme.colorScheme.primary,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ],
                       ],
-                    ],
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    member.roleLabel,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
                     ),
-                  ),
-                  if (member.hasAccount) ...[
                     const SizedBox(height: 3),
                     Text(
-                      'FamilyLog-Account verbunden',
-                      style: theme.textTheme.bodySmall?.copyWith(
+                      member.roleLabel,
+                      style: theme.textTheme.bodyMedium?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant,
                       ),
                     ),
+                    if (member.hasAccount) ...[
+                      const SizedBox(height: 3),
+                      Text(
+                        'FamilyLog-Account verbunden',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
                   ],
-                ],
+                ),
               ),
-            ),
-          ],
+              Icon(
+                Icons.chevron_right,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ],
+          ),
         ),
       ),
     );
